@@ -52,4 +52,12 @@ O projeto está em fase inicial de especificação. A integração depende de ch
 
 ## Desenvolvimento
 
-As instruções normativas de trabalho estão em [AGENTS.md](AGENTS.md). O repositório ainda não possui comandos oficiais de instalação, build, testes ou lint.
+As instruções normativas de trabalho estão em [AGENTS.md](AGENTS.md).
+
+```sh
+npm install
+npm run build
+npm test
+```
+
+Depois do build, carregue a pasta do projeto como extensão sem compactação em `chrome://extensions`.

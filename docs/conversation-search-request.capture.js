@@ -1,0 +1,29 @@
+fetch("https://chatgpt.com/backend-api/conversations/search?query=real+clinic&cursor=", {
+  "headers": {
+    "accept": "*/*",
+    "accept-language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "authorization": "Bearer [TOKEN_REMOVIDO]",
+    "cache-control": "no-cache",
+    "oai-client-build-number": "8160987",
+    "oai-client-version": "prod-de97061a1c9aff3931a7342defd6241031cd316a",
+    "oai-device-id": "ID_ANONIMO_0021",
+    "oai-language": "pt-BR",
+    "oai-session-id": "ID_ANONIMO_0022",
+    "pragma": "no-cache",
+    "priority": "u=1, i",
+    "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "x-oai-is-client-observation": "[OBSERVACAO_REMOVIDA]",
+    "x-openai-target-path": "/backend-api/conversations/search",
+    "x-openai-target-route": "/backend-api/conversations/search"
+  },
+  "referrer": "https://chatgpt.com/",
+  "body": null,
+  "method": "GET",
+  "mode": "cors",
+  "credentials": "include"
+});

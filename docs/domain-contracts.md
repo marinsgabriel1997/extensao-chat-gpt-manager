@@ -17,11 +17,12 @@ Identificadores devem ser não vazios. A camada de integração é responsável 
 interface Conversation {
   id: ConversationId;
   title: string;
+  preview: string;
   projectId: ProjectId | null;
 }
 ```
 
-Representa uma conversa disponível para apresentação e seleção. Campos adicionais da integração não integram automaticamente o domínio.
+Representa uma conversa disponível para apresentação e seleção. `preview` contém o trecho retornado pela pesquisa do ChatGPT ou uma string vazia quando não houver trecho. Campos adicionais da integração não integram automaticamente o domínio.
 
 Uma conversa é elegível para os resultados quando `projectId` é `null`. Conversas com `projectId` não nulo são removidas antes da formação da seleção.
 
@@ -110,7 +111,8 @@ type MoveItemResult =
   | {
       conversationId: ConversationId;
       status: "skipped";
-      reason: "already_in_destination";
+      reason: "already_in_project";
+      projectId: ProjectId;
     }
   | {
       conversationId: ConversationId;
@@ -155,7 +157,7 @@ interface ConversationMover {
 
 Essas interfaces expressam as necessidades do domínio sem expor autenticação, URLs, cabeçalhos ou payloads da integração.
 
-Antes de mover um item, a aplicação obtém seu estado atual por meio do repositório. Quando `projectId` coincide com `destinationProjectId`, nenhuma chamada de movimentação é realizada para esse item.
+Antes de mover um item, a aplicação obtém seu estado atual por meio do repositório. Quando `projectId` não é nulo, nenhuma chamada de movimentação é realizada para esse item.
 
 ## Evento de debug
 

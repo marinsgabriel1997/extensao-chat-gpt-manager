@@ -1,0 +1,225 @@
+{
+  "items": [
+    {
+      "id": "ID_ANONIMO_0001",
+      "title": "[TITLE_REMOVIDO]",
+      "create_time": "1700000000",
+      "update_time": "1700000000",
+      "pinned_time": null,
+      "mapping": null,
+      "current_node": null,
+      "conversation_template_id": "ID_ANONIMO_0002",
+      "gizmo_id": "ID_ANONIMO_0002",
+      "is_archived": false,
+      "is_starred": null,
+      "is_temporary_chat": false,
+      "is_do_not_remember": false,
+      "memory_scope": "global_enabled",
+      "context_scopes": null,
+      "context_scopes_v2": {
+        "context_scopes": [
+          {
+            "is_siloed": false,
+            "scope_namespace": "global",
+            "sub_scope": null,
+            "key": null,
+            "key_timestamp": null,
+            "key_scoped_access_claim": null
+          }
+        ]
+      },
+      "workspace_id": null,
+      "async_status": null,
+      "safe_urls": [],
+      "blocked_urls": [],
+      "conversation_origin": null,
+      "is_automation_conversation": false,
+      "snippet": "[SNIPPET_REMOVIDO]",
+      "sugar_item_id": null,
+      "sugar_item_visible": false,
+      "owner": {
+        "user_id": "ID_ANONIMO_0003",
+        "user_email": "usuario@example.invalid",
+        "name": "[NAME_REMOVIDO]",
+        "avatar_url": "https://example.invalid/"
+      }
+    },
+    {
+      "id": "ID_ANONIMO_0004",
+      "title": "[TITLE_REMOVIDO]",
+      "create_time": "1700000000",
+      "update_time": "1700000000",
+      "pinned_time": null,
+      "mapping": null,
+      "current_node": null,
+      "conversation_template_id": "ID_ANONIMO_0002",
+      "gizmo_id": "ID_ANONIMO_0002",
+      "is_archived": false,
+      "is_starred": null,
+      "is_temporary_chat": false,
+      "is_do_not_remember": false,
+      "memory_scope": "global_enabled",
+      "context_scopes": [],
+      "context_scopes_v2": {
+        "context_scopes": [
+          {
+            "is_siloed": false,
+            "scope_namespace": "global",
+            "sub_scope": null,
+            "key": null,
+            "key_timestamp": null,
+            "key_scoped_access_claim": null
+          }
+        ]
+      },
+      "workspace_id": null,
+      "async_status": null,
+      "safe_urls": [],
+      "blocked_urls": [],
+      "conversation_origin": null,
+      "is_automation_conversation": false,
+      "snippet": "[SNIPPET_REMOVIDO]",
+      "sugar_item_id": null,
+      "sugar_item_visible": false,
+      "owner": {
+        "user_id": "ID_ANONIMO_0003",
+        "user_email": "usuario@example.invalid",
+        "name": "[NAME_REMOVIDO]",
+        "avatar_url": "https://example.invalid/"
+      }
+    },
+    {
+      "id": "ID_ANONIMO_0005",
+      "title": "[TITLE_REMOVIDO]",
+      "create_time": "1700000000",
+      "update_time": "1700000000",
+      "pinned_time": null,
+      "mapping": null,
+      "current_node": null,
+      "conversation_template_id": "ID_ANONIMO_0002",
+      "gizmo_id": "ID_ANONIMO_0002",
+      "is_archived": false,
+      "is_starred": null,
+      "is_temporary_chat": false,
+      "is_do_not_remember": false,
+      "memory_scope": "global_enabled",
+      "context_scopes": [],
+      "context_scopes_v2": {
+        "context_scopes": [
+          {
+            "is_siloed": false,
+            "scope_namespace": "global",
+            "sub_scope": null,
+            "key": null,
+            "key_timestamp": null,
+            "key_scoped_access_claim": null
+          }
+        ]
+      },
+      "workspace_id": null,
+      "async_status": null,
+      "safe_urls": [],
+      "blocked_urls": [],
+      "conversation_origin": null,
+      "is_automation_conversation": false,
+      "snippet": "[SNIPPET_REMOVIDO]",
+      "sugar_item_id": null,
+      "sugar_item_visible": false,
+      "owner": {
+        "user_id": "ID_ANONIMO_0003",
+        "user_email": "usuario@example.invalid",
+        "name": "[NAME_REMOVIDO]",
+        "avatar_url": "https://example.invalid/"
+      }
+    },
+    {
+      "id": "ID_ANONIMO_0006",
+      "title": "[TITLE_REMOVIDO]",
+      "create_time": "1700000000",
+      "update_time": "1700000000",
+      "pinned_time": null,
+      "mapping": null,
+      "current_node": null,
+      "conversation_template_id": "ID_ANONIMO_0002",
+      "gizmo_id": "ID_ANONIMO_0002",
+      "is_archived": false,
+      "is_starred": null,
+      "is_temporary_chat": false,
+      "is_do_not_remember": false,
+      "memory_scope": "global_enabled",
+      "context_scopes": [],
+      "context_scopes_v2": {
+        "context_scopes": [
+          {
+            "is_siloed": false,
+            "scope_namespace": "global",
+            "sub_scope": null,
+            "key": null,
+            "key_timestamp": null,
+            "key_scoped_access_claim": null
+          }
+        ]
+      },
+      "workspace_id": null,
+      "async_status": null,
+      "safe_urls": [],
+      "blocked_urls": [],
+      "conversation_origin": null,
+      "is_automation_conversation": false,
+      "snippet": "[SNIPPET_REMOVIDO]",
+      "sugar_item_id": null,
+      "sugar_item_visible": false,
+      "owner": {
+        "user_id": "ID_ANONIMO_0003",
+        "user_email": "usuario@example.invalid",
+        "name": "[NAME_REMOVIDO]",
+        "avatar_url": "https://example.invalid/"
+      }
+    },
+    {
+      "id": "ID_ANONIMO_0007",
+      "title": "[TITLE_REMOVIDO]",
+      "create_time": "1700000000",
+      "update_time": "1700000000",
+      "pinned_time": null,
+      "mapping": null,
+      "current_node": null,
+      "conversation_template_id": "ID_ANONIMO_0002",
+      "gizmo_id": "ID_ANONIMO_0002",
+      "is_archived": false,
+      "is_starred": null,
+      "is_temporary_chat": false,
+      "is_do_not_remember": false,
+      "memory_scope": "global_enabled",
+      "context_scopes": [],
+      "context_scopes_v2": {
+        "context_scopes": [
+          {
+            "is_siloed": false,
+            "scope_namespace": "global",
+            "sub_scope": null,
+            "key": null,
+            "key_timestamp": null,
+            "key_scoped_access_claim": null
+          }
+        ]
+      },
+      "workspace_id": null,
+      "async_status": null,
+      "safe_urls": [],
+      "blocked_urls": [],
+      "conversation_origin": null,
+      "is_automation_conversation": false,
+      "snippet": "[SNIPPET_REMOVIDO]",
+      "sugar_item_id": null,
+      "sugar_item_visible": false,
+      "owner": {
+        "user_id": "ID_ANONIMO_0003",
+        "user_email": "usuario@example.invalid",
+        "name": "[NAME_REMOVIDO]",
+        "avatar_url": "https://example.invalid/"
+      }
+    }
+  ],
+  "cursor": "[CURSOR_REMOVIDO]"
+}

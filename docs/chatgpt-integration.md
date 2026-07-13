@@ -36,9 +36,19 @@
   - `cursor`
   - os itens podem expor `conversation_id` como identificador util para operacoes posteriores
   - nao assumir que o identificador vira em `id`
+  - o trecho correspondente a pesquisa foi observado em `item.payload.snippet`
 
 - `GET /backend-api/conversation/{conversation_id}`
   - Usado para obter detalhe da conversa.
+  - O payload observado inclui `mapping` e `current_node`.
+  - `mapping` e uma tabela de nos ligados pelos campos `parent` e `children`.
+  - O caminho ativo pode ser percorrido de `current_node` ate a raiz por `parent` e invertido para obter a ordem da conversa.
+  - Uma mensagem textual visivel do usuario foi observada em:
+    - `node.message.author.role = "user"`
+    - `node.message.content.content_type = "text"`
+    - `node.message.content.parts[]`
+  - Mensagens com `node.message.metadata.is_visually_hidden_from_conversation = true` nao representam texto visivel da conversa.
+  - Conversas fora de Projetos podem ser abertas na rota `/c/{conversation_id}`.
 
 ### Projetos
 
@@ -48,6 +58,14 @@
     - `owned_only`
     - `conversations_per_gizmo`
     - `limit`
+  - Combinacao validada para listagem:
+    - `owned_only=true`
+    - `conversations_per_gizmo=5`
+    - `limit=20`
+  - Combinacao rejeitada com `422 Unprocessable Entity`:
+    - `owned_only=true`
+    - `conversations_per_gizmo=0`
+    - `limit=100`
   - Estrutura de resposta observada:
     - `items`
     - `cursor`
@@ -121,6 +139,12 @@
     - `cursor`
     - `limit`
     - `owned_only`
+  - Fluxo de continuacao observado:
+    - usar o cursor retornado em `item.conversations.cursor` da sidebar na primeira chamada
+    - `limit=5`
+    - `owned_only=true`
+    - cada resposta contem `items` e `cursor`
+    - enquanto `cursor` nao for nulo, a proxima chamada usa esse novo valor
 - Os itens retornados incluem campos como:
   - `id`
   - `title`
@@ -170,4 +194,3 @@
 - Confirmar resposta completa de `POST /backend-api/projects`.
 - Confirmar como remover conversa de um projeto.
 - Confirmar como a conversa reflete o vinculo com projeto no payload detalhado.
-- Confirmar paginacao completa de `GET /backend-api/gizmos/{project_id}/conversations`.

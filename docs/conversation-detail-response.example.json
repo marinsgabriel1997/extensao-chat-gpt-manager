@@ -1,0 +1,613 @@
+{
+  "title": "[TITLE_REMOVIDO]",
+  "create_time": 1700000000,
+  "update_time": 1700000000,
+  "moderation_results": [],
+  "plugin_ids": null,
+  "conversation_id": "ID_ANONIMO_0001",
+  "conversation_template_id": null,
+  "gizmo_id": null,
+  "gizmo_type": null,
+  "is_archived": false,
+  "is_starred": null,
+  "safe_urls": [
+    "https://example.invalid/",
+    "https://example.invalid/",
+    "https://example.invalid/",
+    "https://example.invalid/",
+    "https://example.invalid/",
+    "https://example.invalid/"
+  ],
+  "blocked_urls": [],
+  "default_model_slug": "gpt-5-5-thinking",
+  "atlas_mode_enabled": null,
+  "conversation_origin": null,
+  "is_read_only": null,
+  "voice": null,
+  "async_status": null,
+  "disabled_tool_ids": [],
+  "is_temporary_chat": false,
+  "is_do_not_remember": false,
+  "memory_scope": "global_enabled",
+  "context_scopes": [],
+  "sugar_item_id": null,
+  "sugar_item_visible": false,
+  "pinned_time": null,
+  "is_study_mode": false,
+  "owner": null,
+  "mapping": {
+    "client-created-root": {
+      "id": "client-created-root",
+      "message": null,
+      "parent": null,
+      "children": [
+        "ID_ANONIMO_0002"
+      ]
+    },
+    "ID_ANONIMO_0002": {
+      "id": "ID_ANONIMO_0002",
+      "message": {
+        "id": "ID_ANONIMO_0002",
+        "author": {
+          "role": "system",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": null,
+        "update_time": null,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "[CONTEUDO_REMOVIDO]"
+          ]
+        },
+        "status": "finished_successfully",
+        "end_turn": true,
+        "weight": 0,
+        "metadata": {
+          "is_visually_hidden_from_conversation": true,
+          "can_save": false
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "client-created-root",
+      "children": [
+        "ID_ANONIMO_0003"
+      ]
+    },
+    "ID_ANONIMO_0003": {
+      "id": "ID_ANONIMO_0003",
+      "message": {
+        "id": "ID_ANONIMO_0003",
+        "author": {
+          "role": "system",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": null,
+        "update_time": null,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "[CONTEUDO_REMOVIDO]"
+          ]
+        },
+        "status": "finished_successfully",
+        "end_turn": true,
+        "weight": 0,
+        "metadata": {
+          "rebase_developer_message": true,
+          "is_visually_hidden_from_conversation": true,
+          "can_save": false
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0002",
+      "children": [
+        "ID_ANONIMO_0004"
+      ]
+    },
+    "ID_ANONIMO_0004": {
+      "id": "ID_ANONIMO_0004",
+      "message": {
+        "id": "ID_ANONIMO_0004",
+        "author": {
+          "role": "system",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": null,
+        "update_time": null,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "[CONTEUDO_REMOVIDO]"
+          ]
+        },
+        "status": "finished_successfully",
+        "end_turn": false,
+        "weight": 0,
+        "metadata": {
+          "is_visually_hidden_from_conversation": true,
+          "can_save": false
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0003",
+      "children": [
+        "ID_ANONIMO_0005"
+      ]
+    },
+    "ID_ANONIMO_0005": {
+      "id": "ID_ANONIMO_0005",
+      "message": {
+        "id": "ID_ANONIMO_0005",
+        "author": {
+          "role": "user",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": null,
+        "update_time": null,
+        "content": {
+          "content_type": "user_editable_context",
+          "user_profile": "[USER_PROFILE_REMOVIDO]",
+          "user_instructions": "[USER_INSTRUCTIONS_REMOVIDO]"
+        },
+        "status": "finished_successfully",
+        "end_turn": null,
+        "weight": 1,
+        "metadata": {
+          "is_visually_hidden_from_conversation": true,
+          "user_context_message_data": {
+            "about_user_message": "[ABOUT_USER_MESSAGE_REMOVIDO]"
+          },
+          "is_user_system_message": true,
+          "can_save": false
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0004",
+      "children": [
+        "ID_ANONIMO_0006"
+      ]
+    },
+    "ID_ANONIMO_0006": {
+      "id": "ID_ANONIMO_0006",
+      "message": {
+        "id": "ID_ANONIMO_0006",
+        "author": {
+          "role": "system",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1700000000,
+        "update_time": null,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "[CONTEUDO_REMOVIDO]"
+          ]
+        },
+        "status": "finished_successfully",
+        "end_turn": null,
+        "weight": 0,
+        "metadata": {
+          "request_id": "ID_ANONIMO_0007",
+          "message_source": null,
+          "turn_exchange_id": "ID_ANONIMO_0008",
+          "working_turn_id": "ID_ANONIMO_0008",
+          "is_visually_hidden_from_conversation": true,
+          "can_save": false
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0005",
+      "children": [
+        "ID_ANONIMO_0009"
+      ]
+    },
+    "ID_ANONIMO_0009": {
+      "id": "ID_ANONIMO_0009",
+      "message": {
+        "id": "ID_ANONIMO_0009",
+        "author": {
+          "role": "user",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1700000000,
+        "update_time": 1700000000,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "[CONTEUDO_REMOVIDO]"
+          ]
+        },
+        "status": "finished_successfully",
+        "end_turn": null,
+        "weight": 1,
+        "metadata": {
+          "selected_sources": [],
+          "serialization_metadata": {
+            "custom_symbol_offsets": []
+          },
+          "request_id": "ID_ANONIMO_0007",
+          "message_source": null,
+          "turn_exchange_id": "ID_ANONIMO_0008",
+          "working_turn_id": "ID_ANONIMO_0008",
+          "resolved_model_slug": "gpt-5-5-thinking",
+          "can_save": false
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0006",
+      "children": [
+        "ID_ANONIMO_0010"
+      ]
+    },
+    "ID_ANONIMO_0010": {
+      "id": "ID_ANONIMO_0010",
+      "message": {
+        "id": "ID_ANONIMO_0010",
+        "author": {
+          "role": "system",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1700000000,
+        "update_time": null,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "[CONTEUDO_REMOVIDO]"
+          ]
+        },
+        "status": "finished_successfully",
+        "end_turn": null,
+        "weight": 1,
+        "metadata": {
+          "is_contextual_answers_system_message": true,
+          "is_visually_hidden_from_conversation": true,
+          "command": "prompt",
+          "contextual_answers_message_type": "sources_and_filters_prompt",
+          "chime_version": 1,
+          "request_id": "ID_ANONIMO_0007",
+          "message_type": "next",
+          "turn_exchange_id": "ID_ANONIMO_0008",
+          "working_turn_id": "ID_ANONIMO_0008",
+          "model_slug": "gpt-5-5-thinking",
+          "default_model_slug": "gpt-5-5-thinking",
+          "thinking_effort": "standard",
+          "parent_id": "ID_ANONIMO_0009",
+          "can_save": false
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0009",
+      "children": [
+        "ID_ANONIMO_0011"
+      ]
+    },
+    "ID_ANONIMO_0011": {
+      "id": "ID_ANONIMO_0011",
+      "message": {
+        "id": "ID_ANONIMO_0011",
+        "author": {
+          "role": "assistant",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1700000000,
+        "update_time": null,
+        "content": {
+          "content_type": "model_editable_context",
+          "model_set_context": "",
+          "repository": null,
+          "repo_summary": null,
+          "structured_context": null
+        },
+        "status": "finished_successfully",
+        "end_turn": null,
+        "weight": 1,
+        "metadata": {
+          "search_result_groups": [],
+          "chime_version": 1,
+          "request_id": "ID_ANONIMO_0007",
+          "message_type": "next",
+          "turn_exchange_id": "ID_ANONIMO_0008",
+          "working_turn_id": "ID_ANONIMO_0008",
+          "model_slug": "gpt-5-5-thinking",
+          "default_model_slug": "gpt-5-5-thinking",
+          "thinking_effort": "standard",
+          "can_save": false,
+          "parent_id": "ID_ANONIMO_0010",
+          "model_switcher_deny": []
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0010",
+      "children": [
+        "ID_ANONIMO_0012"
+      ]
+    },
+    "ID_ANONIMO_0012": {
+      "id": "ID_ANONIMO_0012",
+      "message": {
+        "id": "ID_ANONIMO_0012",
+        "author": {
+          "role": "assistant",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1700000000,
+        "update_time": null,
+        "content": {
+          "content_type": "thoughts",
+          "thoughts": [],
+          "source_analysis_msg_id": "ID_ANONIMO_0013"
+        },
+        "status": "finished_successfully",
+        "end_turn": false,
+        "weight": 1,
+        "metadata": {
+          "reasoning_status": "is_reasoning",
+          "citations": [],
+          "content_references": [],
+          "resolved_model_slug": "gpt-5-5-thinking",
+          "hide_inline_actions": true,
+          "disable_turn_actions": true,
+          "chime_version": 1,
+          "request_id": "ID_ANONIMO_0007",
+          "message_type": "next",
+          "turn_exchange_id": "ID_ANONIMO_0008",
+          "working_turn_id": "ID_ANONIMO_0008",
+          "model_slug": "gpt-5-5-thinking",
+          "default_model_slug": "gpt-5-5-thinking",
+          "thinking_effort": "standard",
+          "parent_id": "ID_ANONIMO_0013",
+          "classifier_response": "default",
+          "reasoning_start_time": 1700000000,
+          "skip_reasoning_title": "Pular",
+          "can_save": false,
+          "model_switcher_deny": []
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0011",
+      "children": [
+        "ID_ANONIMO_0014"
+      ]
+    },
+    "ID_ANONIMO_0014": {
+      "id": "ID_ANONIMO_0014",
+      "message": {
+        "id": "ID_ANONIMO_0014",
+        "author": {
+          "role": "assistant",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1700000000,
+        "update_time": null,
+        "content": {
+          "content_type": "reasoning_recap",
+          "content": "[CONTENT_REMOVIDO]"
+        },
+        "status": "finished_successfully",
+        "end_turn": false,
+        "weight": 1,
+        "metadata": {
+          "reasoning_status": "reasoning_ended",
+          "finished_duration_sec": 1,
+          "reasoning_start_time": 1700000000,
+          "reasoning_end_time": 1700000000,
+          "request_id": "ID_ANONIMO_0007",
+          "message_type": "next",
+          "turn_exchange_id": "ID_ANONIMO_0008",
+          "working_turn_id": "ID_ANONIMO_0008",
+          "model_slug": "gpt-5-5-thinking",
+          "default_model_slug": "gpt-5-5-thinking",
+          "thinking_effort": "standard",
+          "can_save": false,
+          "parent_id": "ID_ANONIMO_0012",
+          "model_switcher_deny": []
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0012",
+      "children": [
+        "ID_ANONIMO_0015"
+      ]
+    },
+    "ID_ANONIMO_0015": {
+      "id": "ID_ANONIMO_0015",
+      "message": {
+        "id": "ID_ANONIMO_0015",
+        "author": {
+          "role": "assistant",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1700000000,
+        "update_time": 1700000000,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "[CONTEUDO_REMOVIDO]"
+          ]
+        },
+        "status": "finished_successfully",
+        "end_turn": true,
+        "weight": 1,
+        "metadata": {
+          "finish_details": {
+            "type": "stop",
+            "stop_tokens": [
+              200002
+            ]
+          },
+          "is_complete": true,
+          "citations": [],
+          "content_references": [],
+          "story_events": [],
+          "resolved_model_slug": "gpt-5-5-thinking",
+          "search_result_groups": [],
+          "request_id": "ID_ANONIMO_0007",
+          "message_type": "next",
+          "turn_exchange_id": "ID_ANONIMO_0008",
+          "working_turn_id": "ID_ANONIMO_0008",
+          "model_slug": "gpt-5-5-thinking",
+          "default_model_slug": "gpt-5-5-thinking",
+          "thinking_effort": "standard",
+          "can_save": true,
+          "parent_id": "ID_ANONIMO_0014",
+          "model_switcher_deny": []
+        },
+        "recipient": "all",
+        "channel": "final"
+      },
+      "parent": "ID_ANONIMO_0014",
+      "children": [
+        "ID_ANONIMO_0016"
+      ]
+    },
+    "ID_ANONIMO_0016": {
+      "id": "ID_ANONIMO_0016",
+      "message": {
+        "id": "ID_ANONIMO_0016",
+        "author": {
+          "role": "user",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1700000000,
+        "update_time": 1700000000,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "[CONTEUDO_REMOVIDO]"
+          ]
+        },
+        "status": "finished_successfully",
+        "end_turn": null,
+        "weight": 1,
+        "metadata": {
+          "selected_sources": [],
+          "serialization_metadata": {
+            "custom_symbol_offsets": []
+          },
+          "request_id": "ID_ANONIMO_0017",
+          "message_source": null,
+          "turn_exchange_id": "ID_ANONIMO_0018",
+          "working_turn_id": "ID_ANONIMO_0018",
+          "resolved_model_slug": "gpt-5-5-thinking",
+          "can_save": false
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0015",
+      "children": [
+        "ID_ANONIMO_0019"
+      ]
+    },
+    "ID_ANONIMO_0019": {
+      "id": "ID_ANONIMO_0019",
+      "message": {
+        "id": "ID_ANONIMO_0019",
+        "author": {
+          "role": "assistant",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1700000000,
+        "update_time": null,
+        "content": {
+          "content_type": "model_editable_context",
+          "model_set_context": "",
+          "repository": null,
+          "repo_summary": null,
+          "structured_context": null
+        },
+        "status": "finished_successfully",
+        "end_turn": null,
+        "weight": 1,
+        "metadata": {
+          "search_result_groups": [],
+          "chime_version": 1,
+          "request_id": "ID_ANONIMO_0017",
+          "message_type": "next",
+          "turn_exchange_id": "ID_ANONIMO_0018",
+          "working_turn_id": "ID_ANONIMO_0018",
+          "model_slug": "gpt-5-5-thinking",
+          "default_model_slug": "gpt-5-5-thinking",
+          "thinking_effort": "standard",
+          "can_save": false,
+          "parent_id": "ID_ANONIMO_0016",
+          "model_switcher_deny": []
+        },
+        "recipient": "all",
+        "channel": null
+      },
+      "parent": "ID_ANONIMO_0016",
+      "children": [
+        "ID_ANONIMO_0020"
+      ]
+    },
+    "ID_ANONIMO_0020": {
+      "id": "ID_ANONIMO_0020",
+      "message": {
+        "id": "ID_ANONIMO_0020",
+        "author": {
+          "role": "assistant",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1700000000,
+        "update_time": 1700000000,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "[CONTEUDO_REMOVIDO]"
+          ]
+        },
+        "status": "finished_successfully",
+        "end_turn": true,
+        "weight": 1,
+        "metadata": {
+          "citations": [],
+          "content_references": [],
+          "story_events": [],
+          "resolved_model_slug": "gpt-5-5-thinking",
+          "search_result_groups": [],
+          "request_id": "ID_ANONIMO_0017",
+          "message_type": "next",
+          "turn_exchange_id": "ID_ANONIMO_0018",
+          "working_turn_id": "ID_ANONIMO_0018",
+          "model_slug": "gpt-5-5-thinking",
+          "default_model_slug": "gpt-5-5-thinking",
+          "thinking_effort": "standard",
+          "can_save": true,
+          "parent_id": "ID_ANONIMO_0019",
+          "model_switcher_deny": []
+        },
+        "recipient": "all",
+        "channel": "final"
+      },
+      "parent": "ID_ANONIMO_0019",
+      "children": []
+    }
+  },
+  "current_node": "ID_ANONIMO_0020"
+}

@@ -48,6 +48,18 @@ Os casos de uso coordenam o domínio e as portas de integração:
 
 A aplicação impede a execução quando a seleção está vazia ou quando não há Projeto de destino.
 
+## Cache de pesquisa
+
+O Side Panel mantém um cache temporário em memória indexado pela query sem espaços externos e sem distinção entre maiúsculas e minúsculas. O cache existe somente durante o ciclo de vida da página do Side Panel e não usa armazenamento persistente.
+
+Consultas repetidas reutilizam conversas e contagem de itens filtrados. Após uma operação em lote, itens movidos ou ignorados por já estarem em Projetos são removidos de todas as entradas. Itens com falha permanecem disponíveis para nova tentativa.
+
+A camada de integração carrega todas as páginas de Projetos e todas as páginas de conversas de cada Projeto uma vez. Os identificadores formam um `Set<ConversationId>` usado para filtrar pesquisas sem consultar detalhes individuais. A revalidação imediatamente anterior à movimentação consulta o estado atual da conversa.
+
+## Controle de requisições
+
+Chamadas à integração são iniciadas com intervalo mínimo de 500 milissegundos. Consultas de detalhe e movimentações são processadas uma por vez. Ao receber `429 Too Many Requests`, a operação é interrompida e nenhuma repetição automática é executada.
+
 ## Domínio
 
 O domínio contém:

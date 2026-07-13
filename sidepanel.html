@@ -36,6 +36,12 @@
         cursor: pointer;
       }
 
+      button:disabled,
+      select:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
       .app {
         min-height: 100vh;
         display: flex;
@@ -216,10 +222,11 @@
       }
 
       .conversation {
+        position: relative;
         display: grid;
         grid-template-columns: auto minmax(0, 1fr);
         gap: 10px;
-        padding: 12px;
+        padding: 12px 42px 12px 12px;
         border: 1px solid #383838;
         border-radius: 12px;
         background: #2f2f2f;
@@ -245,6 +252,46 @@
         white-space: nowrap;
       }
 
+      .conversation-content {
+        min-width: 0;
+      }
+
+      .conversation-preview {
+        display: -webkit-box;
+        overflow: hidden;
+        margin-top: 7px;
+        color: #b4b4b4;
+        font-size: 12px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+        line-clamp: 4;
+      }
+
+      .conversation-open {
+        position: absolute;
+        top: 50%;
+        right: 0;
+        width: 30px;
+        height: 42px;
+        border: 0;
+        border-left: 1px solid #4a4a4a;
+        border-radius: 8px 0 0 8px;
+        background: #383838;
+        color: #d1d1d1;
+        font-size: 16px;
+        transform: translateY(-50%);
+      }
+
+      .conversation-open:hover,
+      .conversation-open:focus-visible {
+        background: #4a4a4a;
+        color: #ffffff;
+        outline: none;
+      }
+
       .conversation-meta {
         margin-top: 4px;
         font-size: 11px;
@@ -264,6 +311,34 @@
         text-align: center;
         font-size: 11px;
         color: #9b9b9b;
+      }
+
+      .empty-state,
+      .notice {
+        padding: 18px 14px;
+        border: 1px dashed #4a4a4a;
+        border-radius: 12px;
+        color: #b4b4b4;
+        font-size: 12px;
+        line-height: 1.5;
+        text-align: center;
+      }
+
+      .notice {
+        display: none;
+        margin-top: 12px;
+        border-style: solid;
+        text-align: left;
+      }
+
+      .notice.visible {
+        display: block;
+      }
+
+      .notice.error {
+        border-color: #777777;
+        background: #303030;
+        color: #f4f4f4;
       }
 
       .move-card,
@@ -328,6 +403,8 @@
         height: 17px;
         border-radius: 99px;
         background: #676767;
+        border: 0;
+        padding: 0;
       }
 
       .switch::after {
@@ -339,6 +416,15 @@
         height: 11px;
         border-radius: 50%;
         background: #f4f4f4;
+      }
+
+      .switch[aria-checked="false"] {
+        background: #424242;
+      }
+
+      .switch[aria-checked="false"]::after {
+        right: 16px;
+        background: #9b9b9b;
       }
 
       footer {
@@ -360,23 +446,24 @@
               <p class="subtitle">Organize conversas em massa</p>
             </div>
           </div>
-          <span class="status"><span class="status-dot"></span>Conectado</span>
+          <span class="status" id="connection-status"><span class="status-dot"></span>Pronto</span>
         </div>
       </header>
 
       <main>
         <section aria-labelledby="search-title">
           <h2 id="search-title">Pesquisar conversas</h2>
-          <div class="search" style="margin-top: 9px">
+          <form class="search" id="search-form" style="margin-top: 9px">
             <input
               class="field"
+              id="search-query"
               type="search"
-              value="typescript"
               aria-label="Consulta"
               placeholder="Digite uma palavra ou assunto"
+              required
             />
-            <button class="button button-primary" type="button">Buscar</button>
-          </div>
+            <button class="button button-primary" id="search-button" type="submit">Buscar</button>
+          </form>
           <p class="search-note">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M12 8v4l2.5 1.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -389,47 +476,16 @@
           <div class="selection-bar">
             <div>
               <h2 id="results-title">Resultados</h2>
-              <p class="selection-count">3 conversas encontradas · 2 selecionadas</p>
+              <p class="selection-count" id="selection-count">Nenhuma pesquisa executada</p>
             </div>
-            <button class="text-button" type="button">Selecionar todas</button>
+            <button class="text-button" id="select-all-button" type="button" disabled>Selecionar todas</button>
           </div>
 
-          <div class="list">
-            <label class="conversation selected">
-              <input type="checkbox" checked />
-              <span>
-                <span class="conversation-top">
-                  <span class="conversation-title">Aprendendo generics em TypeScript</span>
-                  <span class="badge">12 jul</span>
-                </span>
-                <span class="conversation-meta">Interfaces, tipos genéricos e exemplos práticos</span>
-              </span>
-            </label>
-
-            <label class="conversation selected">
-              <input type="checkbox" checked />
-              <span>
-                <span class="conversation-top">
-                  <span class="conversation-title">Configuração inicial do tsconfig</span>
-                  <span class="badge">8 jul</span>
-                </span>
-                <span class="conversation-meta">Opções strict e estrutura de compilação</span>
-              </span>
-            </label>
-
-            <label class="conversation">
-              <input type="checkbox" />
-              <span>
-                <span class="conversation-top">
-                  <span class="conversation-title">Diferenças entre type e interface</span>
-                  <span class="badge">2 jul</span>
-                </span>
-                <span class="conversation-meta">Quando usar cada recurso da linguagem</span>
-              </span>
-            </label>
+          <div class="list" id="conversation-list">
+            <div class="empty-state">Pesquise um assunto para carregar conversas que ainda não pertencem a Projetos.</div>
           </div>
 
-          <p class="load-state">Todas as páginas foram verificadas · 4 já estavam em Projetos</p>
+          <p class="load-state" id="result-summary"></p>
         </section>
 
         <section class="move-card" aria-labelledby="move-title">
@@ -437,14 +493,14 @@
             <h2 id="move-title">Mover para o Projeto</h2>
             <span class="muted" style="font-size: 11px">Destino</span>
           </div>
-          <select class="select" aria-label="Projeto de destino">
-            <option>LIXEIRA</option>
-            <option>Estudos</option>
-            <option>Trabalho</option>
+          <select class="select" id="project-select" aria-label="Projeto de destino" disabled>
+            <option value="">Carregando Projetos…</option>
           </select>
-          <p class="move-summary">2 conversas serão movidas. Movimentações redundantes serão ignoradas.</p>
-          <button class="button button-accent" type="button">Mover 2 conversas</button>
+          <p class="move-summary" id="move-summary">Selecione conversas e um Projeto de destino.</p>
+          <button class="button button-accent" id="move-button" type="button" disabled>Mover conversas</button>
         </section>
+
+        <div class="notice" id="notice" role="status"></div>
 
         <section class="debug-card" aria-labelledby="debug-title">
           <div class="debug-heading">
@@ -452,18 +508,16 @@
               <span>Modo debug</span>
               <span class="badge">ATIVO</span>
             </div>
-            <span class="switch" role="switch" aria-checked="true" aria-label="Modo debug ativo"></span>
+            <button class="switch" id="debug-toggle" type="button" role="switch" aria-checked="true" aria-label="Desativar modo debug"></button>
           </div>
-          <div class="debug-output" aria-label="Eventos recentes de depuração">
-            <div><span class="debug-time">14:32:08</span> search.started query="typescript"</div>
-            <div><span class="debug-time">14:32:09</span> search.page_loaded page=1 items=7</div>
-            <div><span class="debug-time">14:32:09</span> filter.projected removed=4</div>
-            <div><span class="debug-time">14:32:09</span> search.completed available=3</div>
+          <div class="debug-output" id="debug-output" aria-label="Eventos recentes de depuração">
+            <div class="debug-line">Aguardando eventos…</div>
           </div>
         </section>
       </main>
 
-      <footer>Protótipo visual · nenhuma operação real será executada</footer>
+      <footer>ChatGPT Manager · operações executadas com sua sessão atual</footer>
     </div>
+    <script type="module" src="dist/sidepanel.js"></script>
   </body>
 </html>

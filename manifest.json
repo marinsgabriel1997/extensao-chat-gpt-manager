@@ -9,8 +9,10 @@
     "default_title": "Abrir ChatGPT Manager"
   },
   "background": {
-    "service_worker": "service-worker.js"
+    "service_worker": "dist/service-worker.js",
+    "type": "module"
   },
+  "host_permissions": ["https://chatgpt.com/*"],
   "side_panel": {
     "default_path": "sidepanel.html"
   },

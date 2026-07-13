@@ -1,0 +1,33 @@
+fetch(
+	"https://chatgpt.com/backend-api/gizmos/ID_ANONIMO_0001/conversations?cursor=[CURSOR_REMOVIDO]&limit=5&owned_only=true",
+	{
+		headers: {
+			accept: "*/*",
+			"accept-language": "pt-BR,pt;q=0.9,en;q=0.8",
+			authorization:
+				"Bearer [TOKEN_REMOVIDO]",
+			"cache-control": "no-cache",
+			"oai-client-build-number": "8160987",
+			"oai-client-version": "prod-de97061a1c9aff3931a7342defd6241031cd316a",
+			"oai-device-id": "ID_ANONIMO_0002",
+			"oai-language": "pt-BR",
+			"oai-session-id": "ID_ANONIMO_0003",
+			pragma: "no-cache",
+			priority: "u=1, i",
+			"sec-ch-ua": '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
+			"sec-ch-ua-mobile": "?0",
+			"sec-ch-ua-platform": '"Windows"',
+			"sec-fetch-dest": "empty",
+			"sec-fetch-mode": "cors",
+			"sec-fetch-site": "same-origin",
+			"x-oai-is-client-observation": "[OBSERVACAO_REMOVIDA]",
+			"x-openai-target-path": "/backend-api/gizmos/ID_ANONIMO_0001/conversations",
+			"x-openai-target-route": "/backend-api/gizmos/{gizmo_id}/conversations",
+		},
+		referrer: "https://chatgpt.com/",
+		body: null,
+		method: "GET",
+		mode: "cors",
+		credentials: "include",
+	},
+);
