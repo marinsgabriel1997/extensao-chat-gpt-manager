@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatGPT Manager</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background: #212121;
+        color: #f4f4f4;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        background: #212121;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button,
+      label,
+      select {
+        cursor: pointer;
+      }
+
+      .app {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .header {
+        padding: 18px 18px 14px;
+        background: #212121;
+        border-bottom: 1px solid #383838;
+      }
+
+      .brand-row,
+      .section-heading,
+      .selection-bar,
+      .conversation-top,
+      .debug-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .brand-mark {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        background: #f4f4f4;
+        color: #212121;
+        font-weight: 750;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 16px;
+        letter-spacing: -0.01em;
+      }
+
+      h2 {
+        font-size: 13px;
+      }
+
+      .subtitle,
+      .muted,
+      .conversation-meta,
+      .debug-line {
+        color: #b4b4b4;
+      }
+
+      .subtitle {
+        margin-top: 2px;
+        font-size: 12px;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        border-radius: 999px;
+        background: #303030;
+        color: #ececec;
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #d1d1d1;
+      }
+
+      main {
+        flex: 1;
+        padding: 16px;
+      }
+
+      .search {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+      }
+
+      .field,
+      .select {
+        width: 100%;
+        min-height: 40px;
+        border: 1px solid #424242;
+        border-radius: 10px;
+        background: #2f2f2f;
+        color: #f4f4f4;
+        outline: none;
+      }
+
+      .field {
+        padding: 0 12px;
+      }
+
+      .field:focus,
+      .select:focus {
+        border-color: #8e8e8e;
+        box-shadow: 0 0 0 3px rgb(255 255 255 / 10%);
+      }
+
+      .button {
+        min-height: 40px;
+        border: 0;
+        border-radius: 10px;
+        padding: 0 14px;
+        font-weight: 680;
+      }
+
+      .button-primary {
+        background: #f4f4f4;
+        color: #212121;
+      }
+
+      .button-secondary {
+        border: 1px solid #424242;
+        background: #2f2f2f;
+        color: #ececec;
+      }
+
+      .button-accent {
+        width: 100%;
+        background: #f4f4f4;
+        color: #212121;
+      }
+
+      .search-note {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 9px;
+        font-size: 11px;
+        color: #b4b4b4;
+      }
+
+      .search-note svg {
+        flex: 0 0 auto;
+      }
+
+      .selection-bar {
+        margin: 18px 0 10px;
+      }
+
+      .selection-count {
+        font-size: 12px;
+        color: #b4b4b4;
+      }
+
+      .text-button {
+        border: 0;
+        padding: 4px;
+        background: transparent;
+        color: #ececec;
+        font-size: 12px;
+        font-weight: 680;
+      }
+
+      .list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .conversation {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid #383838;
+        border-radius: 12px;
+        background: #2f2f2f;
+      }
+
+      .conversation.selected {
+        border-color: #777777;
+        background: #383838;
+      }
+
+      .conversation input {
+        width: 16px;
+        height: 16px;
+        margin: 2px 0 0;
+        accent-color: #f4f4f4;
+      }
+
+      .conversation-title {
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .conversation-meta {
+        margin-top: 4px;
+        font-size: 11px;
+      }
+
+      .badge {
+        flex: 0 0 auto;
+        padding: 3px 6px;
+        border-radius: 6px;
+        background: #424242;
+        color: #cdcdcd;
+        font-size: 10px;
+      }
+
+      .load-state {
+        padding: 12px 4px;
+        text-align: center;
+        font-size: 11px;
+        color: #9b9b9b;
+      }
+
+      .move-card,
+      .debug-card {
+        margin-top: 16px;
+        border: 1px solid #383838;
+        border-radius: 12px;
+        background: #2f2f2f;
+      }
+
+      .move-card {
+        padding: 13px;
+      }
+
+      .section-heading {
+        margin-bottom: 9px;
+      }
+
+      .select {
+        padding: 0 10px;
+      }
+
+      .move-summary {
+        margin: 9px 0 11px;
+        font-size: 11px;
+        color: #b4b4b4;
+      }
+
+      .debug-card {
+        overflow: hidden;
+      }
+
+      .debug-heading {
+        padding: 10px 12px;
+        border-bottom: 1px solid #424242;
+      }
+
+      .debug-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .debug-output {
+        padding: 10px 12px;
+        background: #171717;
+        color: #d1d1d1;
+        font-family: "Cascadia Code", Consolas, monospace;
+        font-size: 10px;
+        line-height: 1.6;
+      }
+
+      .debug-time {
+        color: #ffffff;
+      }
+
+      .switch {
+        position: relative;
+        width: 30px;
+        height: 17px;
+        border-radius: 99px;
+        background: #676767;
+      }
+
+      .switch::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        right: 3px;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #f4f4f4;
+      }
+
+      footer {
+        padding: 10px 16px 14px;
+        color: #8e8e8e;
+        font-size: 10px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="brand-row">
+          <div class="brand">
+            <div class="brand-mark">CM</div>
+            <div>
+              <h1>ChatGPT Manager</h1>
+              <p class="subtitle">Organize conversas em massa</p>
+            </div>
+          </div>
+          <span class="status"><span class="status-dot"></span>Conectado</span>
+        </div>
+      </header>
+
+      <main>
+        <section aria-labelledby="search-title">
+          <h2 id="search-title">Pesquisar conversas</h2>
+          <div class="search" style="margin-top: 9px">
+            <input
+              class="field"
+              type="search"
+              value="typescript"
+              aria-label="Consulta"
+              placeholder="Digite uma palavra ou assunto"
+            />
+            <button class="button button-primary" type="button">Buscar</button>
+          </div>
+          <p class="search-note">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 8v4l2.5 1.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            Conversas que já estão em Projetos são ocultadas.
+          </p>
+        </section>
+
+        <section aria-labelledby="results-title">
+          <div class="selection-bar">
+            <div>
+              <h2 id="results-title">Resultados</h2>
+              <p class="selection-count">3 conversas encontradas · 2 selecionadas</p>
+            </div>
+            <button class="text-button" type="button">Selecionar todas</button>
+          </div>
+
+          <div class="list">
+            <label class="conversation selected">
+              <input type="checkbox" checked />
+              <span>
+                <span class="conversation-top">
+                  <span class="conversation-title">Aprendendo generics em TypeScript</span>
+                  <span class="badge">12 jul</span>
+                </span>
+                <span class="conversation-meta">Interfaces, tipos genéricos e exemplos práticos</span>
+              </span>
+            </label>
+
+            <label class="conversation selected">
+              <input type="checkbox" checked />
+              <span>
+                <span class="conversation-top">
+                  <span class="conversation-title">Configuração inicial do tsconfig</span>
+                  <span class="badge">8 jul</span>
+                </span>
+                <span class="conversation-meta">Opções strict e estrutura de compilação</span>
+              </span>
+            </label>
+
+            <label class="conversation">
+              <input type="checkbox" />
+              <span>
+                <span class="conversation-top">
+                  <span class="conversation-title">Diferenças entre type e interface</span>
+                  <span class="badge">2 jul</span>
+                </span>
+                <span class="conversation-meta">Quando usar cada recurso da linguagem</span>
+              </span>
+            </label>
+          </div>
+
+          <p class="load-state">Todas as páginas foram verificadas · 4 já estavam em Projetos</p>
+        </section>
+
+        <section class="move-card" aria-labelledby="move-title">
+          <div class="section-heading">
+            <h2 id="move-title">Mover para o Projeto</h2>
+            <span class="muted" style="font-size: 11px">Destino</span>
+          </div>
+          <select class="select" aria-label="Projeto de destino">
+            <option>LIXEIRA</option>
+            <option>Estudos</option>
+            <option>Trabalho</option>
+          </select>
+          <p class="move-summary">2 conversas serão movidas. Movimentações redundantes serão ignoradas.</p>
+          <button class="button button-accent" type="button">Mover 2 conversas</button>
+        </section>
+
+        <section class="debug-card" aria-labelledby="debug-title">
+          <div class="debug-heading">
+            <div class="debug-title" id="debug-title">
+              <span>Modo debug</span>
+              <span class="badge">ATIVO</span>
+            </div>
+            <span class="switch" role="switch" aria-checked="true" aria-label="Modo debug ativo"></span>
+          </div>
+          <div class="debug-output" aria-label="Eventos recentes de depuração">
+            <div><span class="debug-time">14:32:08</span> search.started query="typescript"</div>
+            <div><span class="debug-time">14:32:09</span> search.page_loaded page=1 items=7</div>
+            <div><span class="debug-time">14:32:09</span> filter.projected removed=4</div>
+            <div><span class="debug-time">14:32:09</span> search.completed available=3</div>
+          </div>
+        </section>
+      </main>
+
+      <footer>Protótipo visual · nenhuma operação real será executada</footer>
+    </div>
+  </body>
+</html>

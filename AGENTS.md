@@ -24,9 +24,9 @@ O MVP cobre:
 - selecionar em massa a partir dos filtros e ajustar a seleção manualmente;
 - listar Projetos do ChatGPT;
 - mover conversas selecionadas para um Projeto;
-- excluir conversas em massa.
+- usar um Projeto criado previamente pelo usuário, como `LIXEIRA`, para separar conversas que serão revisadas posteriormente.
 
-Exclusão é operação destrutiva e exige confirmação explícita antes da execução.
+Exclusão em massa não faz parte do MVP. O projeto `LIXEIRA` é uma convenção de uso, não um recurso especial criado ou administrado automaticamente pela extensão.
 
 Arquivamento em massa não faz parte do MVP enquanto não houver decisão explícita em contrário.
 
@@ -81,8 +81,6 @@ Mudanças de contrato, convenção estrutural ou decisão arquitetural relevante
 - A seleção em massa derivada de filtros deve permitir ajustes manuais posteriores.
 - Não perder silenciosamente ajustes manuais de seleção ao atualizar a interface.
 - Operações em lote devem atuar sobre uma seleção explícita e determinável.
-- Não executar exclusão sem confirmação explícita do usuário.
-- A confirmação deve ocorrer antes da chamada destrutiva, não apenas antes de montar a seleção.
 - Não interpretar seleção vazia como “todas as conversas”.
 - Falhas parciais em operações em lote devem ser representadas de forma explícita; não reportar sucesso total quando houver itens não processados.
 
@@ -147,4 +145,4 @@ Quando fontes canônicas entrarem em conflito, identificar o conflito antes de p
 - Não acoplar domínio ou seleção aos formatos crus da integração.
 - Não adicionar framework de UI.
 - Não incluir arquivamento em massa no MVP sem decisão explícita.
-- Não executar exclusão em massa sem confirmação explícita.
+- Não incluir exclusão em massa no MVP sem decisão explícita.

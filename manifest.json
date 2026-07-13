@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "ChatGPT Manager",
+  "version": "0.1.0",
+  "description": "Pesquise, selecione e organize conversas do ChatGPT em Projetos.",
+  "minimum_chrome_version": "114",
+  "permissions": ["sidePanel"],
+  "action": {
+    "default_title": "Abrir ChatGPT Manager"
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "icons": {
+    "16": "icon/icon-16.png",
+    "32": "icon/icon-32.png",
+    "48": "icon/icon-48.png",
+    "128": "icon/icon-128.png"
+  }
+}
