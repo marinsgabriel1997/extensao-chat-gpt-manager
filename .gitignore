@@ -20,3 +20,7 @@ Thumbs.db
 
 .claude/
 .codex/
+
+# Capturas cruas de respostas da API do ChatGPT usadas para observar contratos:
+# contêm dados reais da conta e não devem ser versionadas.
+*-response.json

@@ -1,9 +1,11 @@
 import type {
   Conversation,
   ConversationId,
+  DeleteBatchResult,
+  DeleteItemResult,
   MoveBatchResult,
-  MoveFailureReason,
   MoveItemResult,
+  OperationFailureReason,
   Project,
   ProjectId,
 } from "./domain.js";
@@ -12,19 +14,65 @@ import { logger } from "./logger.js";
 
 const CHATGPT_ORIGIN = "https://chatgpt.com";
 const MOVE_CONCURRENCY = 1;
+const DELETE_CONCURRENCY = 1;
 const MIN_REQUEST_INTERVAL_MS = 500;
+const LIST_PAGE_SIZE = 100;
+
+// Política de resiliência: apenas falhas transitórias são retentadas. Status
+// determinísticos (400, 403, 404) repetiriam o mesmo resultado, só atrasando o lote.
+const MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 1_000;
+const RETRY_JITTER_RATIO = 0.25;
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+const MAX_RATE_LIMIT_WAIT_MS = 120_000;
 
 type JsonObject = Record<string, unknown>;
 
+interface IntegrationErrorOptions {
+  attempt?: number;
+  retryable?: boolean;
+}
+
 export class IntegrationError extends Error {
+  readonly attempt: number;
+  readonly retryable: boolean;
+
   constructor(
     message: string,
     readonly status: number | null = null,
+    options: IntegrationErrorOptions = {},
   ) {
     super(message);
     this.name = "IntegrationError";
+    this.attempt = options.attempt ?? 1;
+    this.retryable = options.retryable ?? (status !== null && RETRYABLE_STATUSES.has(status));
   }
 }
+
+// `phase: "waiting"` indica pausa por rate limit; `total: 0` indica total ainda
+// desconhecido (paginação em andamento).
+export interface OperationProgress {
+  phase: "working" | "waiting";
+  done: number;
+  total: number;
+  title: string | null;
+}
+
+export type ProgressListener = (progress: OperationProgress) => void;
+
+// Tempo e aleatoriedade são injetáveis para que os testes de backoff sejam
+// determinísticos e não dependam de tempo real.
+export interface ClientDependencies {
+  now: () => number;
+  sleep: (ms: number) => Promise<void>;
+  random: () => number;
+}
+
+const defaultDependencies: ClientDependencies = {
+  now: () => Date.now(),
+  sleep: (ms) => new Promise<void>((resolve) => globalThis.setTimeout(resolve, ms)),
+  random: () => Math.random(),
+};
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -63,6 +111,7 @@ export function conversationFromPayload(payload: unknown): Conversation | null {
     title: stringValue(payload.title) ?? "Conversa sem título",
     preview: firstVisibleUserText(payload),
     projectId: projectIdFromPayload(payload),
+    updatedAt: stringValue(payload.update_time),
   };
 }
 
@@ -82,6 +131,7 @@ export function conversationFromSearchPayload(payload: unknown): Conversation | 
     title: stringValue(payload.title) ?? "Conversa sem título",
     preview: stringValue(searchPayload.snippet) ?? "",
     projectId: null,
+    updatedAt: stringValue(payload.update_time),
   };
 }
 
@@ -186,6 +236,21 @@ export class ChatGptClient {
   private rateLimitedUntil = 0;
   private readonly projectConversationIds = new Set<ConversationId>();
   private projectsPromise: Promise<Project[]> | null = null;
+  private listingPromise: Promise<Conversation[]> | null = null;
+
+  private readonly now: () => number;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly random: () => number;
+
+  private progressListener: ProgressListener | null = null;
+  private progressDone = 0;
+  private progressTotal = 0;
+
+  constructor(dependencies: Partial<ClientDependencies> = {}) {
+    this.now = dependencies.now ?? defaultDependencies.now;
+    this.sleep = dependencies.sleep ?? defaultDependencies.sleep;
+    this.random = dependencies.random ?? defaultDependencies.random;
+  }
 
   async searchEligibleConversations(query: string): Promise<{
     conversations: Conversation[];
@@ -252,17 +317,31 @@ export class ChatGptClient {
 
   async listProjects(): Promise<Project[]> {
     if (this.projectsPromise === null) {
-      this.projectsPromise = this.loadProjectsAndConversationIndex().catch((error: unknown) => {
-        this.projectsPromise = null;
-        this.projectConversationIds.clear();
-        throw error;
-      });
+      this.projectsPromise = this.loadProjectsAndConversationIndex(true).catch(
+        (error: unknown) => {
+          this.projectsPromise = null;
+          this.projectConversationIds.clear();
+          throw error;
+        },
+      );
     }
 
     return this.projectsPromise;
   }
 
-  private async loadProjectsAndConversationIndex(): Promise<Project[]> {
+  // Caminho leve para quem só precisa dos nomes dos Projetos: não pagina as
+  // conversas de cada Projeto (a parte cara do índice usado pela pesquisa).
+  async listProjectNames(): Promise<Project[]> {
+    if (this.projectsPromise !== null) {
+      return this.projectsPromise;
+    }
+
+    return this.loadProjectsAndConversationIndex(false);
+  }
+
+  private async loadProjectsAndConversationIndex(
+    indexProjectConversations: boolean,
+  ): Promise<Project[]> {
     logger.info("projects", "list_started");
     const projects: Project[] = [];
     const projectContinuations: Array<{ projectId: ProjectId; cursor: string }> = [];
@@ -307,11 +386,13 @@ export class ChatGptClient {
     } while (cursor !== null);
 
     const unique = [...new Map(projects.map((project) => [project.id, project])).values()];
-    for (const continuation of projectContinuations) {
-      await this.loadRemainingProjectConversationIds(
-        continuation.projectId,
-        continuation.cursor,
-      );
+    if (indexProjectConversations) {
+      for (const continuation of projectContinuations) {
+        await this.loadRemainingProjectConversationIds(
+          continuation.projectId,
+          continuation.cursor,
+        );
+      }
     }
     unique.sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
     logger.info("projects", "list_completed", {
@@ -413,21 +494,253 @@ export class ChatGptClient {
     return { ...normalizedConversation };
   }
 
+  // Coletas simultâneas compartilham a mesma passada: duas paginações do mesmo
+  // endpoint apenas gastariam requisições e aproximariam o rate limit. O progresso
+  // reportado é o da coleta que iniciou a passada.
+  async listAllConversations(onProgress?: ProgressListener): Promise<Conversation[]> {
+    if (this.listingPromise === null) {
+      this.listingPromise = this.collectAllConversations(onProgress).finally(() => {
+        this.listingPromise = null;
+      });
+    } else {
+      logger.info("inventory", "list_joined_in_flight");
+    }
+
+    return this.listingPromise;
+  }
+
+  private async collectAllConversations(
+    onProgress?: ProgressListener,
+  ): Promise<Conversation[]> {
+    logger.info("inventory", "list_started");
+    // O total só é conhecido ao fim da paginação; o progresso reporta apenas o
+    // acumulado (`total: 0`).
+    this.beginProgress(onProgress, 0);
+    const found: Conversation[] = [];
+    const seenIds = new Set<ConversationId>();
+    let offset = 0;
+    let page = 0;
+
+    for (;;) {
+      const url = new URL("/backend-api/conversations", CHATGPT_ORIGIN);
+      url.searchParams.set("offset", String(offset));
+      url.searchParams.set("limit", String(LIST_PAGE_SIZE));
+      url.searchParams.set("order", "updated");
+      url.searchParams.set("is_archived", "false");
+      url.searchParams.set("is_starred", "false");
+
+      const payload = await this.fetchJson(url, { method: "GET" });
+      if (!isObject(payload)) {
+        throw new IntegrationError("A listagem de conversas retornou um formato inválido.");
+      }
+
+      const rawItems = arrayValue(payload.items);
+      const pageItems = rawItems
+        .map(conversationFromPayload)
+        .filter((item): item is Conversation => item !== null);
+      const newItems = pageItems.filter((item) => !seenIds.has(item.id));
+      for (const item of newItems) {
+        seenIds.add(item.id);
+        found.push(item);
+      }
+
+      page += 1;
+      this.progressDone = found.length;
+      this.reportProgress("working", null);
+      logger.debug("inventory", "page_loaded", {
+        page,
+        offset,
+        items: rawItems.length,
+        newItems: newItems.length,
+      });
+
+      // O campo `total` da resposta não é contagem real (docs/chatgpt-integration.md);
+      // o fim da lista é uma página com menos itens que o limite solicitado.
+      if (rawItems.length < LIST_PAGE_SIZE) {
+        break;
+      }
+
+      if (newItems.length === 0) {
+        logger.warn("inventory", "page_without_new_items", { page, offset });
+        break;
+      }
+
+      offset += rawItems.length;
+    }
+
+    this.endProgress();
+    logger.info("inventory", "list_completed", { pages: page, conversations: found.length });
+    return found;
+  }
+
+  // Revalidação em lote: uma passada pela listagem resolve o vínculo com Projeto
+  // de todas as conversas do lote (uma requisição por página de 100) em vez de um
+  // GET de detalhe por item — o endpoint de detalhe é o que sofre rate limit.
+  // O dado continua vindo do servidor no momento da operação; muda a granularidade,
+  // não a origem. Ids que não aparecerem na listagem caem no GET individual.
+  private async loadBatchSnapshot(
+    conversationIds: readonly ConversationId[],
+  ): Promise<Map<ConversationId, Conversation>> {
+    const snapshot = new Map<ConversationId, Conversation>();
+    const pending = new Set(conversationIds);
+    let offset = 0;
+    let page = 0;
+
+    try {
+      // Se uma coleta completa já está em andamento, aguardá-la custa zero
+      // requisição extra e é tão recente quanto abrir uma passada nova.
+      if (this.listingPromise !== null) {
+        logger.info("revalidation", "batch_snapshot_joined_listing", {
+          requested: conversationIds.length,
+        });
+        for (const conversation of await this.listingPromise) {
+          if (pending.delete(conversation.id)) {
+            snapshot.set(conversation.id, conversation);
+          }
+        }
+        return snapshot;
+      }
+
+      while (pending.size > 0) {
+        const url = new URL("/backend-api/conversations", CHATGPT_ORIGIN);
+        url.searchParams.set("offset", String(offset));
+        url.searchParams.set("limit", String(LIST_PAGE_SIZE));
+        url.searchParams.set("order", "updated");
+        url.searchParams.set("is_archived", "false");
+        url.searchParams.set("is_starred", "false");
+
+        const payload = await this.fetchJson(url, { method: "GET" });
+        if (!isObject(payload)) {
+          throw new IntegrationError("A revalidação em lote retornou um formato inválido.");
+        }
+
+        const rawItems = arrayValue(payload.items);
+        for (const rawItem of rawItems) {
+          const conversation = conversationFromPayload(rawItem);
+          if (conversation !== null && pending.delete(conversation.id)) {
+            snapshot.set(conversation.id, conversation);
+          }
+        }
+
+        page += 1;
+        // Mesma regra de fim de paginação da listagem completa: página incompleta.
+        if (rawItems.length < LIST_PAGE_SIZE) {
+          break;
+        }
+        offset += rawItems.length;
+      }
+    } catch (error) {
+      // Sem snapshot, cada item volta a ser revalidado individualmente: mais lento,
+      // porém nunca menos seguro que o comportamento anterior.
+      logger.warn("revalidation", "batch_snapshot_failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    logger.info("revalidation", "batch_snapshot_loaded", {
+      pages: page,
+      requested: conversationIds.length,
+      resolved: snapshot.size,
+      unresolved: conversationIds.length - snapshot.size,
+    });
+    return snapshot;
+  }
+
+  async deleteConversations(
+    conversationIds: readonly ConversationId[],
+    onProgress?: ProgressListener,
+  ): Promise<DeleteBatchResult> {
+    logger.info("delete", "batch_started", { count: conversationIds.length });
+    const snapshot = await this.loadBatchSnapshot(conversationIds);
+    this.beginProgress(onProgress, conversationIds.length);
+
+    const items = await mapConcurrent(
+      conversationIds,
+      DELETE_CONCURRENCY,
+      async (conversationId): Promise<DeleteItemResult> => {
+        let title: string | null = null;
+        try {
+          const current =
+            snapshot.get(conversationId) ?? (await this.getConversation(conversationId));
+          title = current.title;
+          if (current.projectId !== null) {
+            this.projectConversationIds.add(conversationId);
+            logger.info("delete", "item_skipped", {
+              conversationId,
+              projectId: current.projectId,
+            });
+            return {
+              conversationId,
+              status: "skipped",
+              reason: "in_project",
+              projectId: current.projectId,
+            };
+          }
+
+          const url = new URL(
+            `/backend-api/conversation/id/${encodeURIComponent(conversationId)}`,
+            CHATGPT_ORIGIN,
+          );
+          const payload = await this.fetchJson(url, { method: "DELETE" });
+
+          if (!isObject(payload) || payload.success !== true) {
+            throw new IntegrationError("A exclusão não confirmou sucesso.");
+          }
+
+          logger.info("delete", "item_succeeded", { conversationId });
+          return { conversationId, status: "success" };
+        } catch (error) {
+          // Uma exclusão confirmada pelo servidor cuja resposta se perdeu volta
+          // como 404 na retentativa: o objetivo foi alcançado. Já um 404 na
+          // primeira tentativa costuma indicar id vindo de cache desatualizado,
+          // e essa distinção é útil para o usuário.
+          if (isDeletedOnRetry(error)) {
+            logger.info("delete", "item_succeeded_on_retry", { conversationId });
+            return { conversationId, status: "success" };
+          }
+
+          const reason = failureReason(error);
+          const message = error instanceof Error ? error.message : "Erro desconhecido.";
+          logger.error("delete", "item_failed", { conversationId, reason, message });
+          return { conversationId, status: "failure", reason, message };
+        } finally {
+          this.progressDone += 1;
+          this.reportProgress("working", title);
+        }
+      },
+    );
+    this.endProgress();
+
+    logger.info("delete", "batch_completed", {
+      succeeded: items.filter((item) => item.status === "success").length,
+      skipped: items.filter((item) => item.status === "skipped").length,
+      failed: items.filter((item) => item.status === "failure").length,
+    });
+
+    return { items };
+  }
+
   async moveConversations(
     conversationIds: readonly ConversationId[],
     destinationProjectId: ProjectId,
+    onProgress?: ProgressListener,
   ): Promise<MoveBatchResult> {
     logger.info("move", "batch_started", {
       count: conversationIds.length,
       destinationProjectId,
     });
+    const snapshot = await this.loadBatchSnapshot(conversationIds);
+    this.beginProgress(onProgress, conversationIds.length);
 
     const items = await mapConcurrent(
       conversationIds,
       MOVE_CONCURRENCY,
       async (conversationId): Promise<MoveItemResult> => {
+        let title: string | null = null;
         try {
-          const current = await this.getConversation(conversationId);
+          const current =
+            snapshot.get(conversationId) ?? (await this.getConversation(conversationId));
+          title = current.title;
           if (current.projectId !== null) {
             this.projectConversationIds.add(conversationId);
             logger.info("move", "item_skipped", {
@@ -465,9 +778,13 @@ export class ChatGptClient {
           const message = error instanceof Error ? error.message : "Erro desconhecido.";
           logger.error("move", "item_failed", { conversationId, reason, message });
           return { conversationId, status: "failure", reason, message };
+        } finally {
+          this.progressDone += 1;
+          this.reportProgress("working", title);
         }
       },
     );
+    this.endProgress();
 
     logger.info("move", "batch_completed", {
       succeeded: items.filter((item) => item.status === "success").length,
@@ -506,7 +823,35 @@ export class ChatGptClient {
     return token;
   }
 
+  // Falhas transitórias são retentadas com backoff exponencial e jitter. O jitter
+  // evita que os itens de um mesmo lote sincronizem as retentativas e reincidam
+  // no 429 em bloco.
   private async fetchJson(url: URL, init: RequestInit): Promise<unknown> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await this.attemptFetchJson(url, init, attempt);
+      } catch (error) {
+        if (!isRetryable(error) || attempt >= MAX_ATTEMPTS) {
+          throw error;
+        }
+
+        const delay = this.retryDelay(attempt);
+        logger.warn("integration", "request_retry_scheduled", {
+          method: init.method ?? "GET",
+          path: url.pathname,
+          attempt,
+          delay,
+        });
+        await this.sleep(delay);
+      }
+    }
+  }
+
+  private async attemptFetchJson(
+    url: URL,
+    init: RequestInit,
+    attempt: number,
+  ): Promise<unknown> {
     const token = await this.getAccessToken();
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${token}`);
@@ -515,6 +860,7 @@ export class ChatGptClient {
       method: init.method ?? "GET",
       path: url.pathname,
       query: url.search,
+      attempt,
     });
 
     let response = await this.scheduleRequest(() =>
@@ -525,6 +871,8 @@ export class ChatGptClient {
       }),
     );
 
+    // Renovação de sessão continua fora do backoff: um 401 é resolvido por token
+    // novo, não por espera.
     if (response.status === 401) {
       this.accessToken = null;
       const renewedToken = await this.getAccessToken();
@@ -538,11 +886,16 @@ export class ChatGptClient {
       method: init.method ?? "GET",
       path: url.pathname,
       status: response.status,
+      attempt,
     });
 
     if (response.status === 429) {
-      this.rateLimitedUntil = rateLimitEnd(response);
+      this.rateLimitedUntil = rateLimitEnd(response, this.now());
+      // `retryAfter: null` indica que a janela é o nosso padrão, não uma
+      // instrução do servidor — informação necessária para calibrar a espera.
       logger.warn("integration", "rate_limit_activated", {
+        path: url.pathname,
+        retryAfter: response.headers.get("retry-after"),
         blockedUntil: new Date(this.rateLimitedUntil).toISOString(),
       });
     }
@@ -553,16 +906,23 @@ export class ChatGptClient {
         method: init.method ?? "GET",
         path: url.pathname,
         status: response.status,
+        attempt,
         responseBody,
       });
       const message =
         response.status === 429
           ? "O ChatGPT limitou temporariamente as requisições. Aguarde antes de pesquisar novamente."
           : `O ChatGPT respondeu com status ${response.status}.`;
-      throw new IntegrationError(message, response.status);
+      throw new IntegrationError(message, response.status, { attempt });
     }
 
     return response.json() as Promise<unknown>;
+  }
+
+  private retryDelay(attempt: number): number {
+    const base = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+    const jitter = 1 + (this.random() * 2 - 1) * RETRY_JITTER_RATIO;
+    return Math.round(base * jitter);
   }
 
   private async scheduleRequest<T>(operation: () => Promise<T>): Promise<T> {
@@ -574,40 +934,85 @@ export class ChatGptClient {
 
     await previousRequest;
     try {
-      if (Date.now() < this.rateLimitedUntil) {
-        throw new IntegrationError(
-          "O ChatGPT limitou temporariamente as requisições. Aguarde antes de tentar novamente.",
-          429,
-        );
-      }
+      await this.waitForRateLimitWindow();
 
-      const waitTime = Math.max(0, this.nextRequestAt - Date.now());
+      const waitTime = Math.max(0, this.nextRequestAt - this.now());
       if (waitTime > 0) {
-        await new Promise<void>((resolve) => globalThis.setTimeout(resolve, waitTime));
+        await this.sleep(waitTime);
       }
       return await operation();
     } finally {
-      this.nextRequestAt = Date.now() + MIN_REQUEST_INTERVAL_MS;
+      this.nextRequestAt = this.now() + MIN_REQUEST_INTERVAL_MS;
       releaseQueue();
     }
   }
+
+  // A espera acontece dentro da fila serial: o lote inteiro pausa e retoma junto,
+  // em vez de falhar em cascata enquanto a janela de rate limit está aberta.
+  private async waitForRateLimitWindow(): Promise<void> {
+    const waitMs = this.rateLimitedUntil - this.now();
+    if (waitMs <= 0) {
+      return;
+    }
+
+    if (waitMs > MAX_RATE_LIMIT_WAIT_MS) {
+      throw new IntegrationError(
+        "O ChatGPT limitou as requisições por um período longo. Tente novamente mais tarde.",
+        429,
+        { retryable: false },
+      );
+    }
+
+    logger.warn("integration", "rate_limit_wait_started", { waitMs });
+    this.reportProgress("waiting", null);
+    await this.sleep(waitMs);
+    this.rateLimitedUntil = 0;
+    logger.info("integration", "rate_limit_wait_finished", { waitMs });
+  }
+
+  private beginProgress(listener: ProgressListener | undefined, total: number): void {
+    this.progressListener = listener ?? null;
+    this.progressDone = 0;
+    this.progressTotal = total;
+  }
+
+  private endProgress(): void {
+    this.progressListener = null;
+    this.progressDone = 0;
+    this.progressTotal = 0;
+  }
+
+  private reportProgress(phase: "working" | "waiting", title: string | null): void {
+    this.progressListener?.({
+      phase,
+      done: this.progressDone,
+      total: this.progressTotal,
+      title,
+    });
+  }
 }
 
-function rateLimitEnd(response: Response): number {
+function rateLimitEnd(response: Response, now: number): number {
   const retryAfter = response.headers.get("retry-after");
   if (retryAfter !== null) {
     const seconds = Number(retryAfter);
     if (Number.isFinite(seconds) && seconds >= 0) {
-      return Date.now() + seconds * 1_000;
+      return now + seconds * 1_000;
     }
 
     const date = Date.parse(retryAfter);
-    if (Number.isFinite(date) && date > Date.now()) {
+    if (Number.isFinite(date) && date > now) {
       return date;
     }
   }
 
-  return Date.now() + 60_000;
+  return now + 60_000;
+}
+
+// Erros que não são `IntegrationError` vêm do próprio `fetch` (rede indisponível)
+// e são transitórios por natureza.
+function isRetryable(error: unknown): boolean {
+  return error instanceof IntegrationError ? error.retryable : true;
 }
 
 async function readErrorBody(response: Response): Promise<unknown> {
@@ -623,7 +1028,11 @@ async function readErrorBody(response: Response): Promise<unknown> {
   }
 }
 
-function failureReason(error: unknown): MoveFailureReason {
+function isDeletedOnRetry(error: unknown): boolean {
+  return error instanceof IntegrationError && error.status === 404 && error.attempt > 1;
+}
+
+function failureReason(error: unknown): OperationFailureReason {
   if (!(error instanceof IntegrationError) || error.status === null) {
     return error instanceof IntegrationError ? "integration_error" : "unknown";
   }

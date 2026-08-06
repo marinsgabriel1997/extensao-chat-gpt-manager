@@ -49,9 +49,112 @@
       }
 
       .header {
-        padding: 18px 18px 14px;
+        padding: 18px 18px 0;
         background: #212121;
         border-bottom: 1px solid #383838;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 4px;
+        margin-top: 12px;
+      }
+
+      .tab {
+        border: 0;
+        border-bottom: 2px solid transparent;
+        padding: 8px 14px;
+        background: transparent;
+        color: #b4b4b4;
+        font-size: 12px;
+        font-weight: 680;
+      }
+
+      .tab.active {
+        color: #f4f4f4;
+        border-bottom-color: #f4f4f4;
+      }
+
+      .chips {
+        display: flex;
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      .chip {
+        padding: 6px 11px;
+        border: 1px solid #424242;
+        border-radius: 999px;
+        background: transparent;
+        color: #b4b4b4;
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .chip.active {
+        border-color: #f4f4f4;
+        background: #f4f4f4;
+        color: #212121;
+      }
+
+      .conversation-compact {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        padding: 10px 12px;
+      }
+
+      .conversation-compact .conversation-meta {
+        margin-top: 3px;
+      }
+
+      .conversation-in-project {
+        opacity: 0.75;
+      }
+
+      .checkbox-placeholder {
+        width: 16px;
+      }
+
+      .icon-button {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #b4b4b4;
+      }
+
+      .icon-button:hover,
+      .icon-button:focus-visible {
+        background: #4a4a4a;
+        color: #ffffff;
+        outline: none;
+      }
+
+      .all-actions {
+        position: sticky;
+        bottom: 0;
+        display: none;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 12px 0;
+        background: #212121;
+        border-top: 1px solid #383838;
+      }
+
+      .all-actions.visible {
+        display: flex;
+      }
+
+      .all-actions .selection-count {
+        flex: 1;
+      }
+
+      .all-actions .button {
+        min-height: 36px;
       }
 
       .brand-row,
@@ -341,6 +444,22 @@
         color: #f4f4f4;
       }
 
+      .notice-action {
+        display: block;
+        margin-top: 10px;
+        padding: 6px 12px;
+        border: 1px solid #6f6f6f;
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .notice-action:hover {
+        background: #3a3a3a;
+      }
+
       .move-card,
       .debug-card {
         margin-top: 16px;
@@ -448,9 +567,14 @@
           </div>
           <span class="status" id="connection-status"><span class="status-dot"></span>Pronto</span>
         </div>
+        <nav class="tabs" role="tablist" aria-label="Modos do painel">
+          <button class="tab active" id="tab-organize" type="button" role="tab" aria-selected="true">Buscar e mover</button>
+          <button class="tab" id="tab-all" type="button" role="tab" aria-selected="false">Listar e excluir</button>
+        </nav>
       </header>
 
       <main>
+        <div id="view-organize">
         <section aria-labelledby="search-title">
           <h2 id="search-title">Pesquisar conversas</h2>
           <form class="search" id="search-form" style="margin-top: 9px">
@@ -491,14 +615,61 @@
         <section class="move-card" aria-labelledby="move-title">
           <div class="section-heading">
             <h2 id="move-title">Mover para o Projeto</h2>
-            <span class="muted" style="font-size: 11px">Destino</span>
+            <button class="text-button" id="projects-refresh-button" type="button" hidden>Atualizar</button>
           </div>
-          <select class="select" id="project-select" aria-label="Projeto de destino" disabled>
-            <option value="">Carregando Projetos…</option>
+          <button class="button button-secondary" id="projects-load-button" type="button" style="width: 100%">
+            Carregar projetos
+          </button>
+          <select class="select" id="project-select" aria-label="Projeto de destino" disabled hidden>
+            <option value="">Escolha um Projeto</option>
           </select>
           <p class="move-summary" id="move-summary">Selecione conversas e um Projeto de destino.</p>
           <button class="button button-accent" id="move-button" type="button" disabled>Mover conversas</button>
         </section>
+        </div>
+
+        <div id="view-all" hidden>
+          <section aria-labelledby="all-title">
+            <h2 id="all-title">Todas as conversas</h2>
+
+            <div id="all-controls" hidden>
+              <input
+                class="field"
+                id="all-filter-text"
+                type="search"
+                aria-label="Filtrar por título"
+                placeholder="Filtrar por título"
+                style="margin-top: 9px"
+              />
+              <div class="chips" role="group" aria-label="Filtro de escopo">
+                <button class="chip active" id="chip-outside" type="button">Fora de projeto</button>
+                <button class="chip" id="chip-in" type="button">Em projeto</button>
+                <button class="chip" id="chip-all" type="button">Todas</button>
+              </div>
+
+              <div class="selection-bar">
+                <div>
+                  <p class="selection-count" id="all-summary">Nenhuma conversa carregada</p>
+                  <p class="selection-count">
+                    <span id="all-freshness"></span>
+                    <button class="text-button" id="all-refresh-button" type="button">Atualizar</button>
+                  </p>
+                </div>
+                <button class="text-button" id="all-select-visible" type="button" disabled>Selecionar visíveis</button>
+              </div>
+            </div>
+
+            <div class="list" id="all-list" style="margin-top: 12px">
+              <div class="empty-state">Carregando…</div>
+            </div>
+
+            <div class="all-actions" id="all-actions">
+              <span class="selection-count" id="all-selection-summary"></span>
+              <button class="button button-secondary" id="all-clear-button" type="button">Limpar</button>
+              <button class="button button-primary" id="all-delete-button" type="button">Excluir</button>
+            </div>
+          </section>
+        </div>
 
         <div class="notice" id="notice" role="status"></div>
 

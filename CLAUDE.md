@@ -24,9 +24,11 @@ O MVP cobre:
 - selecionar em massa a partir dos filtros e ajustar a seleção manualmente;
 - listar Projetos do ChatGPT;
 - mover conversas selecionadas para um Projeto;
+- listar todas as conversas não arquivadas, com indicação do Projeto de cada uma e cache local persistente;
+- excluir conversas fora de projeto a partir de seleção explícita, com confirmação;
 - usar um Projeto criado previamente pelo usuário, como `LIXEIRA`, para separar conversas que serão revisadas posteriormente.
 
-Exclusão em massa não faz parte do MVP. O projeto `LIXEIRA` é uma convenção de uso, não um recurso especial criado ou administrado automaticamente pela extensão.
+Exclusão de conversas foi incluída no MVP por decisão explícita do usuário (2026-08-05), restrita ao recorte acima: somente conversas fora de projeto, sempre a partir de seleção explícita e com confirmação. O projeto `LIXEIRA` é uma convenção de uso, não um recurso especial criado ou administrado automaticamente pela extensão.
 
 Arquivamento em massa não faz parte do MVP enquanto não houver decisão explícita em contrário.
 
@@ -145,4 +147,4 @@ Quando fontes canônicas entrarem em conflito, identificar o conflito antes de p
 - Não acoplar domínio ou seleção aos formatos crus da integração.
 - Não adicionar framework de UI.
 - Não incluir arquivamento em massa no MVP sem decisão explícita.
-- Não incluir exclusão em massa no MVP sem decisão explícita.
+- Não ampliar a exclusão de conversas além do recorte aprovado (fora de projeto, seleção explícita, confirmação) sem nova decisão explícita.

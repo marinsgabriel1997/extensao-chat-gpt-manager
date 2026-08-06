@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Pesquise, selecione e organize conversas do ChatGPT em Projetos.",
   "minimum_chrome_version": "114",
-  "permissions": ["sidePanel"],
+  "permissions": ["sidePanel", "storage"],
   "action": {
     "default_title": "Abrir ChatGPT Manager"
   },

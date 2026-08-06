@@ -19,12 +19,21 @@ interface Conversation {
   title: string;
   preview: string;
   projectId: ProjectId | null;
+  updatedAt: string | null;
 }
 ```
 
-Representa uma conversa disponível para apresentação e seleção. `preview` contém o trecho retornado pela pesquisa do ChatGPT ou uma string vazia quando não houver trecho. Campos adicionais da integração não integram automaticamente o domínio.
+Representa uma conversa disponível para apresentação e seleção. `preview` contém o trecho retornado pela pesquisa do ChatGPT ou uma string vazia quando não houver trecho. `updatedAt` contém a última atualização em ISO 8601 ou `null` quando a integração não fornecer o dado. Campos adicionais da integração não integram automaticamente o domínio.
 
-Uma conversa é elegível para os resultados quando `projectId` é `null`. Conversas com `projectId` não nulo são removidas antes da formação da seleção.
+Uma conversa é elegível para os resultados de pesquisa quando `projectId` é `null`. Conversas com `projectId` não nulo são removidas antes da formação da seleção de movimentação. Conversas de GPTs customizados não possuem vínculo com Projeto e mantêm `projectId` nulo.
+
+## ConversationScopeFilter
+
+```ts
+type ConversationScopeFilter = "outside_project" | "in_project" | "all";
+```
+
+Filtro de escopo da listagem completa. `filterByScope` é uma função pura que aplica o filtro sem alterar a coleção original. O filtro é um conceito de domínio independente da UI; mudanças de filtro nunca alteram a seleção.
 
 ## Project
 
@@ -92,16 +101,33 @@ Pré-condições:
 - `destinationProjectId` é não vazio;
 - o Projeto de destino foi escolhido explicitamente pelo usuário.
 
+## DeleteBatchCommand
+
+```ts
+interface DeleteBatchCommand {
+  conversationIds: ConversationId[];
+}
+```
+
+Pré-condições:
+
+- `conversationIds` contém pelo menos um item;
+- todos os identificadores são únicos e não vazios;
+- a seleção foi formada explicitamente pelo usuário; seleção vazia nunca executa exclusão.
+
 ## Resultado por conversa
 
 ```ts
-type MoveFailureReason =
+type OperationFailureReason =
   | "unauthorized"
   | "forbidden"
   | "not_found"
   | "rate_limited"
   | "integration_error"
   | "unknown";
+
+type MoveFailureReason = OperationFailureReason;
+type DeleteFailureReason = OperationFailureReason;
 
 type MoveItemResult =
   | {
@@ -121,6 +147,32 @@ type MoveItemResult =
       message: string;
     };
 ```
+
+```ts
+type DeleteItemResult =
+  | {
+      conversationId: ConversationId;
+      status: "success";
+    }
+  | {
+      conversationId: ConversationId;
+      status: "skipped";
+      reason: "in_project";
+      projectId: ProjectId;
+    }
+  | {
+      conversationId: ConversationId;
+      status: "failure";
+      reason: DeleteFailureReason;
+      message: string;
+    };
+
+interface DeleteBatchResult {
+  items: DeleteItemResult[];
+}
+```
+
+Antes de excluir um item, a aplicação obtém seu estado atual. Quando `projectId` não é nulo, nenhuma chamada de exclusão é realizada e o item é reportado como `skipped`.
 
 ## MoveBatchResult
 
