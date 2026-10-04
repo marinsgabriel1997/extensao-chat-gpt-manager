@@ -3,61 +3,32 @@ import test from "node:test";
 
 import { SearchSessionCache } from "../dist/search-cache.js";
 
-const conversationOne = {
-  id: "one",
-  title: "Primeira",
-  preview: "Texto",
-  projectId: null,
-};
-const conversationTwo = {
-  id: "two",
-  title: "Segunda",
-  preview: "Texto",
-  projectId: null,
-};
+const hitOne = { id: "one", title: "Primeira", snippet: "Trecho", updatedAt: null };
+const hitTwo = { id: "two", title: "Segunda", snippet: "Trecho", updatedAt: null };
 
 test("SearchSessionCache normaliza a query", () => {
   const cache = new SearchSessionCache();
-  cache.set("  TypeScript ", {
-    conversations: [conversationOne],
-    filteredCount: 2,
-  });
+  cache.set("  TypeScript ", { hits: [hitOne] });
 
-  assert.deepEqual(cache.get("typescript"), {
-    conversations: [conversationOne],
-    filteredCount: 2,
-  });
+  assert.deepEqual(cache.get("typescript"), { hits: [hitOne] });
 });
 
 test("SearchSessionCache devolve cópias independentes", () => {
   const cache = new SearchSessionCache();
-  cache.set("query", { conversations: [conversationOne], filteredCount: 0 });
+  cache.set("query", { hits: [hitOne] });
   const firstRead = cache.get("query");
-  firstRead.conversations.length = 0;
+  firstRead.hits.length = 0;
 
-  assert.equal(cache.get("query").conversations.length, 1);
+  assert.equal(cache.get("query").hits.length, 1);
 });
 
-test("SearchSessionCache remove conversas movidas de todas as pesquisas", () => {
+test("SearchSessionCache remove conversas excluídas de todas as pesquisas", () => {
   const cache = new SearchSessionCache();
-  cache.set("first", {
-    conversations: [conversationOne, conversationTwo],
-    filteredCount: 0,
-  });
-  cache.set("second", {
-    conversations: [conversationOne],
-    filteredCount: 3,
-  });
+  cache.set("first", { hits: [hitOne, hitTwo] });
+  cache.set("second", { hits: [hitOne] });
 
   cache.removeConversations(new Set(["one"]));
 
-  assert.deepEqual(
-    cache.get("first").conversations.map((conversation) => conversation.id),
-    ["two"],
-  );
-  assert.deepEqual(cache.get("second"), {
-    conversations: [],
-    filteredCount: 3,
-  });
+  assert.deepEqual(cache.get("first").hits.map((hit) => hit.id), ["two"]);
+  assert.deepEqual(cache.get("second"), { hits: [] });
 });
-

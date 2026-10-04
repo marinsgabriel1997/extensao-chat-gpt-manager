@@ -1,5 +1,7 @@
 import type {
   Conversation,
+  ConversationContext,
+  ConversationSearchHit,
   DeleteBatchResult,
   MoveBatchResult,
   Project,
@@ -8,8 +10,7 @@ import type { DebugEvent } from "./logger.js";
 
 export type ExtensionRequest =
   | { type: "search"; query: string }
-  | { type: "list-projects" }
-  | { type: "list-project-names" }
+  | { type: "get-conversation-context"; conversationId: string }
   | { type: "list-all-conversations"; refresh: boolean }
   | { type: "get-cached-conversations" }
   | { type: "open-conversation"; conversationId: string }
@@ -51,8 +52,8 @@ export interface ConversationInventory {
 }
 
 export type ResponseData =
-  | { conversations: Conversation[]; filteredCount: number }
-  | Project[]
+  | { hits: ConversationSearchHit[] }
+  | ConversationContext
   | ConversationInventory
   | { inventory: ConversationInventory | null }
   | MoveBatchResult

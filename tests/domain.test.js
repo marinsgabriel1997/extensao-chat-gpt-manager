@@ -4,8 +4,12 @@ import test from "node:test";
 import {
   createDeleteCommand,
   createMoveCommand,
+  countByFolder,
+  dragSet,
   eligibleConversations,
-  filterByScope,
+  filterByFolder,
+  filterByTitle,
+  selectRange,
   uniqueConversations,
 } from "../dist/domain.js";
 
@@ -48,24 +52,73 @@ test("createMoveCommand rejeita Projeto vazio", () => {
   assert.throws(() => createMoveCommand(["one"], "  "), /Projeto/);
 });
 
-const scopedConversations = [
-  { id: "free", title: "Livre", preview: "", projectId: null, updatedAt: null },
-  { id: "projected", title: "Em Projeto", preview: "", projectId: "g-p-x", updatedAt: null },
+const folderConversations = [
+  { id: "free", title: "Livre", preview: "", projectId: null, createdAt: null, updatedAt: null },
+  { id: "projected", title: "Em Projeto", preview: "", projectId: "g-p-x", createdAt: null, updatedAt: null },
+  { id: "other", title: "Outro Projeto", preview: "", projectId: "g-p-y", createdAt: null, updatedAt: null },
 ];
 
-test("filterByScope separa conversas fora e dentro de Projetos", () => {
+test("filterByFolder separa conversas por pasta", () => {
   assert.deepEqual(
-    filterByScope(scopedConversations, "outside_project").map((item) => item.id),
+    filterByFolder(folderConversations, { kind: "outside_project" }).map((item) => item.id),
     ["free"],
   );
   assert.deepEqual(
-    filterByScope(scopedConversations, "in_project").map((item) => item.id),
+    filterByFolder(folderConversations, { kind: "project", projectId: "g-p-x" }).map(
+      (item) => item.id,
+    ),
     ["projected"],
   );
   assert.deepEqual(
-    filterByScope(scopedConversations, "all").map((item) => item.id),
-    ["free", "projected"],
+    filterByFolder(folderConversations, { kind: "all" }).map((item) => item.id),
+    ["free", "projected", "other"],
   );
+});
+
+test("countByFolder inclui Projetos vazios e Projetos ausentes da lista", () => {
+  const counts = countByFolder(folderConversations, [
+    { id: "g-p-x", name: "LIXEIRA" },
+    { id: "g-p-empty", name: "Vazio" },
+  ]);
+
+  assert.equal(counts.outsideProject, 1);
+  assert.equal(counts.all, 3);
+  assert.deepEqual([...counts.byProject.entries()], [
+    ["g-p-x", 1],
+    ["g-p-empty", 0],
+    ["g-p-y", 1],
+  ]);
+});
+
+test("filterByTitle ignora maiúsculas e espaços externos", () => {
+  assert.deepEqual(
+    filterByTitle(folderConversations, "  projeto ").map((item) => item.id),
+    ["projected", "other"],
+  );
+  assert.equal(filterByTitle(folderConversations, "   ").length, 3);
+});
+
+test("selectRange devolve o intervalo nos dois sentidos, só com selecionáveis", () => {
+  const ordered = ["a", "b", "c", "d", "e"];
+  const selectable = new Set(["a", "b", "d", "e"]);
+
+  assert.deepEqual(selectRange(ordered, "b", "e", selectable), ["b", "d", "e"]);
+  assert.deepEqual(selectRange(ordered, "e", "b", selectable), ["b", "d", "e"]);
+});
+
+test("selectRange sem âncora visível seleciona somente o alvo", () => {
+  const selectable = new Set(["a", "b"]);
+
+  assert.deepEqual(selectRange(["a", "b"], null, "b", selectable), ["b"]);
+  assert.deepEqual(selectRange(["a", "b"], "fora", "b", selectable), ["b"]);
+  assert.deepEqual(selectRange(["a", "b"], "a", "ausente", selectable), []);
+});
+
+test("dragSet leva a seleção inteira apenas quando o item arrastado está selecionado", () => {
+  const selected = new Set(["a", "b"]);
+
+  assert.deepEqual(dragSet("a", selected), ["a", "b"]);
+  assert.deepEqual(dragSet("c", selected), ["c"]);
 });
 
 test("createDeleteCommand normaliza e elimina IDs duplicados", () => {

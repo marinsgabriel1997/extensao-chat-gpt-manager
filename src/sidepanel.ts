@@ -1,10 +1,17 @@
 import {
-  filterByScope,
+  countByFolder,
+  dragSet,
+  filterByFolder,
+  filterByTitle,
+  selectRange,
   type Conversation,
-  type ConversationScopeFilter,
+  type ConversationContext,
+  type ConversationFolder,
+  type ConversationSearchHit,
   type DeleteBatchResult,
   type MoveBatchResult,
   type Project,
+  type ProjectId,
 } from "./domain.js";
 import type {
   ConversationInventory,
@@ -16,19 +23,61 @@ import type {
 } from "./messages.js";
 import { SearchSessionCache, type CachedSearchResult } from "./search-cache.js";
 
+type SearchMode = "title" | "content";
+
+interface ContentSearchState {
+  query: string;
+  hits: ConversationSearchHit[];
+}
+
+// Linha da lista: uma conversa do inventário (com o trecho da pesquisa, quando
+// houver) ou um resultado da pesquisa ausente do inventário local.
+type VisibleRow =
+  | { kind: "conversation"; conversation: Conversation; snippet: string | null }
+  | { kind: "missing"; hit: ConversationSearchHit };
+
+// Itens enviados para uma operação em andamento ficam travados até a resposta:
+// não mudam de seleção, não são arrastados e não iniciam outra operação.
+interface PendingOperation {
+  kind: "move" | "delete";
+  ids: ReadonlySet<string>;
+}
+
+type ContextState =
+  | { status: "loading" }
+  | { status: "loaded"; context: ConversationContext }
+  | { status: "error"; message: string };
+
+const tabOrganizeButton = requiredElement<HTMLButtonElement>("tab-organize");
+const tabDebugButton = requiredElement<HTMLButtonElement>("tab-debug");
+const organizeToolbar = requiredElement<HTMLElement>("organize-toolbar");
+const viewOrganize = requiredElement<HTMLElement>("view-organize");
+const viewDebug = requiredElement<HTMLElement>("view-debug");
+const notice = requiredElement<HTMLDivElement>("notice");
+const loadPanel = requiredElement<HTMLDivElement>("load-panel");
+const workspace = requiredElement<HTMLElement>("workspace");
 const searchForm = requiredElement<HTMLFormElement>("search-form");
 const searchQuery = requiredElement<HTMLInputElement>("search-query");
-const searchButton = requiredElement<HTMLButtonElement>("search-button");
+const modeTitleButton = requiredElement<HTMLButtonElement>("mode-title");
+const modeContentButton = requiredElement<HTMLButtonElement>("mode-content");
+const searchSubmit = requiredElement<HTMLButtonElement>("search-submit");
+const searchNote = requiredElement<HTMLParagraphElement>("search-note");
+const foldersToggle = requiredElement<HTMLButtonElement>("folders-toggle");
+const foldersActive = requiredElement<HTMLSpanElement>("folders-active");
+const folderList = requiredElement<HTMLDivElement>("folder-list");
+const listSummary = requiredElement<HTMLParagraphElement>("list-summary");
+const freshness = requiredElement<HTMLParagraphElement>("freshness");
+const syncButton = requiredElement<HTMLButtonElement>("sync-button");
+const selectVisibleButton = requiredElement<HTMLButtonElement>("select-visible");
 const conversationList = requiredElement<HTMLDivElement>("conversation-list");
-const selectionCount = requiredElement<HTMLParagraphElement>("selection-count");
-const selectAllButton = requiredElement<HTMLButtonElement>("select-all-button");
-const resultSummary = requiredElement<HTMLParagraphElement>("result-summary");
-const projectSelect = requiredElement<HTMLSelectElement>("project-select");
-const projectsLoadButton = requiredElement<HTMLButtonElement>("projects-load-button");
-const projectsRefreshButton = requiredElement<HTMLButtonElement>("projects-refresh-button");
-const moveSummary = requiredElement<HTMLParagraphElement>("move-summary");
-const moveButton = requiredElement<HTMLButtonElement>("move-button");
-const notice = requiredElement<HTMLDivElement>("notice");
+const actionBar = requiredElement<HTMLDivElement>("action-bar");
+const moveMenu = requiredElement<HTMLDivElement>("move-menu");
+const moveFilter = requiredElement<HTMLInputElement>("move-filter");
+const moveOptions = requiredElement<HTMLDivElement>("move-options");
+const selectionSummary = requiredElement<HTMLSpanElement>("selection-summary");
+const moveOpenButton = requiredElement<HTMLButtonElement>("move-open");
+const deleteButton = requiredElement<HTMLButtonElement>("delete-button");
+const clearButton = requiredElement<HTMLButtonElement>("clear-button");
 const debugToggle = requiredElement<HTMLButtonElement>("debug-toggle");
 const debugOutput = requiredElement<HTMLDivElement>("debug-output");
 const debugBadge = requiredElement<HTMLElement>("debug-title").querySelector<HTMLElement>(
@@ -36,75 +85,98 @@ const debugBadge = requiredElement<HTMLElement>("debug-title").querySelector<HTM
 );
 const connectionStatus = requiredElement<HTMLElement>("connection-status");
 
-const tabOrganizeButton = requiredElement<HTMLButtonElement>("tab-organize");
-const tabAllButton = requiredElement<HTMLButtonElement>("tab-all");
-const viewOrganize = requiredElement<HTMLDivElement>("view-organize");
-const viewAll = requiredElement<HTMLDivElement>("view-all");
-const allControls = requiredElement<HTMLDivElement>("all-controls");
-const allFilterText = requiredElement<HTMLInputElement>("all-filter-text");
-const chipOutside = requiredElement<HTMLButtonElement>("chip-outside");
-const chipIn = requiredElement<HTMLButtonElement>("chip-in");
-const chipAll = requiredElement<HTMLButtonElement>("chip-all");
-const allSummary = requiredElement<HTMLParagraphElement>("all-summary");
-const allFreshness = requiredElement<HTMLParagraphElement>("all-freshness");
-const allSelectVisible = requiredElement<HTMLButtonElement>("all-select-visible");
-const allList = requiredElement<HTMLDivElement>("all-list");
-const allActions = requiredElement<HTMLDivElement>("all-actions");
-const allSelectionSummary = requiredElement<HTMLSpanElement>("all-selection-summary");
-const allClearButton = requiredElement<HTMLButtonElement>("all-clear-button");
-const allDeleteButton = requiredElement<HTMLButtonElement>("all-delete-button");
-const allRefreshButton = requiredElement<HTMLButtonElement>("all-refresh-button");
-
-let conversations: Conversation[] = [];
-let filteredCount = 0;
-let selectedIds = new Set<string>();
+let inventory: Conversation[] = [];
 let projects: Project[] = [];
-let projectsLoaded = false;
+let projectNames = new Map<ProjectId, string>();
+let fetchedAt: string | null = null;
+let inventoryLoaded = false;
 let busy = false;
+let pendingOperation: PendingOperation | null = null;
+
+let selectedIds = new Set<string>();
+let selectionAnchorId: string | null = null;
+let activeFolder: ConversationFolder = { kind: "outside_project" };
+let searchMode: SearchMode = "title";
+let contentSearch: ContentSearchState | null = null;
+let foldersCollapsed = false;
+
+let draggedIds: string[] | null = null;
+let dropTarget: HTMLButtonElement | null = null;
+let renderDeferred = false;
+
+const expandedIds = new Set<string>();
+// Contexto das conversas fica somente em memória: o cache persistente guarda
+// apenas metadados, nunca conteúdo de mensagens.
+const contextStates = new Map<string, ContextState>();
 const searchCache = new SearchSessionCache();
 
-let inventory: Conversation[] = [];
-let inventoryProjects = new Map<string, string>();
-let inventoryFetchedAt: string | null = null;
-let inventoryLoaded = false;
-let inventoryCacheChecked = false;
-let allSelectedIds = new Set<string>();
-let scopeFilter: ConversationScopeFilter = "outside_project";
-
+tabOrganizeButton.addEventListener("click", () => setActiveTab("organize"));
+tabDebugButton.addEventListener("click", () => setActiveTab("debug"));
 searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  void search();
+  if (searchMode === "content") {
+    void runContentSearch();
+  }
 });
-
-selectAllButton.addEventListener("click", () => {
-  const allSelected =
-    conversations.length > 0 && conversations.every((item) => selectedIds.has(item.id));
-  selectedIds = allSelected
-    ? new Set<string>()
-    : new Set(conversations.map((conversation) => conversation.id));
-  renderConversations();
-  updateActions();
+searchQuery.addEventListener("input", () => {
+  if (searchMode === "content" && searchQuery.value.trim().length === 0) {
+    contentSearch = null;
+  }
+  if (searchMode === "title" || contentSearch === null) {
+    renderList();
+    updateControls();
+  }
 });
-
-projectSelect.addEventListener("change", updateActions);
-projectsLoadButton.addEventListener("click", () => void loadProjectsManually());
-moveButton.addEventListener("click", () => void moveSelected());
+modeTitleButton.addEventListener("click", () => setSearchMode("title"));
+modeContentButton.addEventListener("click", () => setSearchMode("content"));
+foldersToggle.addEventListener("click", () => {
+  foldersCollapsed = !foldersCollapsed;
+  renderFolders();
+});
+syncButton.addEventListener("click", () => void loadInventory());
+selectVisibleButton.addEventListener("click", toggleVisibleSelection);
+moveOpenButton.addEventListener("click", toggleMoveMenu);
+moveFilter.addEventListener("input", renderMoveOptions);
+moveFilter.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    moveOptions.querySelector<HTMLButtonElement>(".move-option")?.click();
+  }
+});
+deleteButton.addEventListener("click", () => void deleteConversations([...selectedIds]));
+clearButton.addEventListener("click", clearSelection);
 debugToggle.addEventListener("click", () => void toggleDebug());
 
-tabOrganizeButton.addEventListener("click", () => setActiveTab("organize"));
-tabAllButton.addEventListener("click", () => setActiveTab("all"));
-allFilterText.addEventListener("input", () => renderInventory());
-chipOutside.addEventListener("click", () => setScopeFilter("outside_project"));
-chipIn.addEventListener("click", () => setScopeFilter("in_project"));
-chipAll.addEventListener("click", () => setScopeFilter("all"));
-allSelectVisible.addEventListener("click", toggleVisibleSelection);
-allClearButton.addEventListener("click", () => {
-  allSelectedIds.clear();
-  renderInventory();
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") {
+    return;
+  }
+  if (!moveMenu.hidden) {
+    closeMoveMenu();
+    moveOpenButton.focus();
+    return;
+  }
+  // Esc dentro de um campo de texto pertence ao campo (limpar a busca).
+  const target = event.target;
+  if (target instanceof HTMLInputElement && target.type !== "checkbox") {
+    return;
+  }
+  if (selectedIds.size > 0) {
+    clearSelection();
+  }
 });
-allDeleteButton.addEventListener("click", () => void deleteConversations([...allSelectedIds]));
-allRefreshButton.addEventListener("click", () => void loadInventory());
-projectsRefreshButton.addEventListener("click", () => void loadProjectsManually());
+
+// O handler da pasta roda antes deste (bubbling); aqui só limpamos o destaque
+// quando o cursor sai de qualquer pasta que aceite soltura.
+document.addEventListener("dragover", (event) => {
+  if (draggedIds === null) {
+    return;
+  }
+  const target = event.target;
+  if (!(target instanceof Element) || target.closest(".folder[data-project-id]") === null) {
+    clearDropTarget();
+  }
+});
 
 // Progresso das operações longas. A guarda por `busy` evita que um evento
 // atrasado sobrescreva o estado "Pronto" depois do fim da operação.
@@ -116,30 +188,75 @@ chrome.runtime.onMessage.addListener((message: unknown) => {
 
 void initialize();
 
-// A abertura do painel não dispara nenhuma chamada ao ChatGPT: Projetos e
-// conversas são carregados somente pelos botões dedicados de cada aba.
+// Abrir o painel lê somente o cache local; nenhuma chamada ao ChatGPT é feita
+// sem ação explícita do usuário.
 async function initialize(): Promise<void> {
-  updateActions();
   try {
     await refreshDebug();
   } catch (error) {
     setConnection("Atenção");
     showNotice(errorMessage(error), true);
   }
+  await loadCachedInventory();
 }
 
-async function loadProjectsManually(): Promise<void> {
+// A aba de debug substitui a tela de organização inteira; o estado da
+// organização (pasta, seleção, busca) é preservado ao voltar.
+function setActiveTab(tab: "organize" | "debug"): void {
+  const isDebug = tab === "debug";
+  organizeToolbar.hidden = isDebug;
+  viewOrganize.hidden = isDebug;
+  actionBar.hidden = isDebug;
+  viewDebug.hidden = !isDebug;
+  tabOrganizeButton.classList.toggle("active", !isDebug);
+  tabDebugButton.classList.toggle("active", isDebug);
+  tabOrganizeButton.setAttribute("aria-selected", String(!isDebug));
+  tabDebugButton.setAttribute("aria-selected", String(isDebug));
+  if (isDebug) {
+    closeMoveMenu();
+    void refreshDebugSafely();
+  }
+}
+
+// --- Inventário -------------------------------------------------------------
+
+async function loadCachedInventory(): Promise<void> {
+  try {
+    const result = await sendMessage<{ inventory: ConversationInventory | null }>({
+      type: "get-cached-conversations",
+    });
+    if (result.inventory !== null) {
+      applyInventory(result.inventory);
+      return;
+    }
+    showLoadPrompt("Nenhum dado local disponível.", "Carregar conversas");
+  } catch (error) {
+    showLoadPrompt("Não foi possível ler os dados locais.", "Carregar conversas");
+    showNotice(errorMessage(error), true);
+  }
+}
+
+async function loadInventory(): Promise<void> {
   if (busy) {
     return;
   }
 
-  setBusy(true, "Carregando Projetos…");
+  setBusy(true, "Carregando todas as conversas…");
   hideNotice();
+  if (!inventoryLoaded) {
+    loadPanel.replaceChildren(createEmptyState("Carregando conversas do ChatGPT…"));
+  }
+
   try {
-    await loadProjects();
-    setConnection("Pronto");
+    const result = await sendMessage<ConversationInventory>({
+      type: "list-all-conversations",
+      refresh: true,
+    });
+    applyInventory(result);
   } catch (error) {
-    setConnection("Atenção");
+    if (!inventoryLoaded) {
+      showLoadPrompt("Não foi possível carregar as conversas.", "Tentar novamente");
+    }
     showNotice(errorMessage(error), true);
   } finally {
     setBusy(false);
@@ -147,44 +264,177 @@ async function loadProjectsManually(): Promise<void> {
   }
 }
 
-async function search(): Promise<void> {
+function showLoadPrompt(message: string, label: string): void {
+  workspace.hidden = true;
+  loadPanel.hidden = false;
+
+  const element = document.createElement("div");
+  element.className = "empty-state";
+  const text = document.createElement("p");
+  text.textContent = message;
+  const action = document.createElement("button");
+  action.className = "button button-primary";
+  action.type = "button";
+  action.textContent = label;
+  action.style.marginTop = "10px";
+  action.addEventListener("click", () => void loadInventory());
+  element.append(text, action);
+
+  loadPanel.replaceChildren(element);
+}
+
+function applyInventory(result: ConversationInventory): void {
+  inventory = result.conversations;
+  projects = result.projects;
+  projectNames = new Map(result.projects.map((project) => [project.id, project.name]));
+  fetchedAt = result.fetchedAt;
+  inventoryLoaded = true;
+  loadPanel.hidden = true;
+  workspace.hidden = false;
+
+  if (activeFolder.kind === "project" && !hasFolder(activeFolder.projectId)) {
+    activeFolder = { kind: "outside_project" };
+  }
+
+  // Reconciliação preserva a seleção manual por interseção: somente ids que
+  // continuam existentes e fora de projeto permanecem selecionados.
+  const selectable = selectableIds();
+  const previousSize = selectedIds.size;
+  selectedIds = new Set([...selectedIds].filter((id) => selectable.has(id)));
+  const removed = previousSize - selectedIds.size;
+  if (removed > 0) {
+    showNotice(
+      `${removed} conversa(s) saíram da seleção porque foram removidas ou entraram em Projetos.`,
+      false,
+    );
+  }
+
+  renderAll();
+}
+
+function hasFolder(projectId: ProjectId): boolean {
+  return (
+    projectNames.has(projectId) ||
+    inventory.some((conversation) => conversation.projectId === projectId)
+  );
+}
+
+function selectableIds(): Set<string> {
+  return new Set(
+    inventory
+      .filter((conversation) => conversation.projectId === null)
+      .map((conversation) => conversation.id),
+  );
+}
+
+// --- Visão atual --------------------------------------------------------------
+
+function visibleRows(): VisibleRow[] {
+  const scoped = filterByFolder(inventory, activeFolder);
+
+  if (searchMode === "content" && contentSearch !== null) {
+    const scopedById = new Map(scoped.map((conversation) => [conversation.id, conversation]));
+    const inventoryIds = new Set(inventory.map((conversation) => conversation.id));
+    const rows: VisibleRow[] = [];
+    for (const hit of contentSearch.hits) {
+      const conversation = scopedById.get(hit.id);
+      if (conversation !== undefined) {
+        rows.push({ kind: "conversation", conversation, snippet: hit.snippet });
+      } else if (!inventoryIds.has(hit.id) && activeFolder.kind === "all") {
+        // Sem inventário não há como saber a pasta: só aparece em "Todas".
+        rows.push({ kind: "missing", hit });
+      }
+    }
+    return rows;
+  }
+
+  const query = searchMode === "title" ? searchQuery.value : "";
+  return filterByTitle(scoped, query).map((conversation) => ({
+    kind: "conversation",
+    conversation,
+    snippet: null,
+  }));
+}
+
+function visibleConversations(): Conversation[] {
+  return visibleRows()
+    .filter((row): row is Extract<VisibleRow, { kind: "conversation" }> => row.kind === "conversation")
+    .map((row) => row.conversation);
+}
+
+function missingHitCount(): number {
+  if (contentSearch === null) {
+    return 0;
+  }
+  const inventoryIds = new Set(inventory.map((conversation) => conversation.id));
+  return contentSearch.hits.filter((hit) => !inventoryIds.has(hit.id)).length;
+}
+
+function folderLabel(folder: ConversationFolder): string {
+  switch (folder.kind) {
+    case "outside_project":
+      return "Sem projeto";
+    case "all":
+      return "Todas";
+    case "project":
+      return projectNames.get(folder.projectId) ?? "Projeto não listado";
+  }
+}
+
+function isActiveFolder(folder: ConversationFolder): boolean {
+  if (folder.kind === "project") {
+    return activeFolder.kind === "project" && activeFolder.projectId === folder.projectId;
+  }
+  return activeFolder.kind === folder.kind;
+}
+
+function setActiveFolder(folder: ConversationFolder): void {
+  activeFolder = folder;
+  selectionAnchorId = null;
+  renderAll();
+}
+
+function setSearchMode(mode: SearchMode): void {
+  searchMode = mode;
+  const isContent = mode === "content";
+  modeTitleButton.classList.toggle("active", !isContent);
+  modeContentButton.classList.toggle("active", isContent);
+  modeTitleButton.setAttribute("aria-pressed", String(!isContent));
+  modeContentButton.setAttribute("aria-pressed", String(isContent));
+  searchSubmit.hidden = !isContent;
+  searchQuery.placeholder = isContent
+    ? "Pesquisar no conteúdo (Enter)"
+    : "Filtrar por título";
+  if (!isContent) {
+    contentSearch = null;
+  }
+  renderAll();
+  searchQuery.focus();
+}
+
+async function runContentSearch(): Promise<void> {
   const query = searchQuery.value.trim();
   if (query.length === 0 || busy) {
     return;
   }
 
-  setBusy(true, "Pesquisando todas as páginas…");
   hideNotice();
   const cached = searchCache.get(query);
-
   if (cached !== null) {
-    recordCacheEvent("hit", { query, conversations: cached.conversations.length });
-    conversations = cached.conversations;
-    filteredCount = cached.filteredCount;
-    selectedIds = new Set<string>();
-    renderConversations();
-    updateActions();
-    showNotice("Resultados carregados do cache temporário.", false);
-    setBusy(false);
+    recordCacheEvent("hit", { query, hits: cached.hits.length });
+    contentSearch = { query, hits: cached.hits };
+    renderAll();
     return;
   }
 
   recordCacheEvent("miss", { query });
-  conversationList.replaceChildren(createEmptyState("Pesquisando conversas…"));
-
+  setBusy(true, "Pesquisando no conteúdo…");
   try {
     const result = await sendMessage<CachedSearchResult>({ type: "search", query });
-    conversations = result.conversations;
-    filteredCount = result.filteredCount;
     searchCache.set(query, result);
-    selectedIds = new Set<string>();
-    renderConversations();
-    updateActions();
+    contentSearch = { query, hits: result.hits };
+    renderAll();
   } catch (error) {
-    conversations = [];
-    filteredCount = 0;
-    selectedIds.clear();
-    renderConversations();
     showNotice(errorMessage(error), true);
   } finally {
     setBusy(false);
@@ -192,46 +442,595 @@ async function search(): Promise<void> {
   }
 }
 
-async function loadProjects(): Promise<void> {
-  // Caminho leve: somente os nomes dos Projetos. O índice completo de
-  // conversas por Projeto é construído sob demanda pela primeira pesquisa.
-  projects = await sendMessage<Project[]>({ type: "list-project-names" });
-  projectsLoaded = true;
-  // O botão grande de carregar dá lugar ao select; atualizar vira ação discreta.
-  projectsLoadButton.hidden = true;
-  projectSelect.hidden = false;
-  projectsRefreshButton.hidden = false;
-  projectSelect.replaceChildren();
+// --- Renderização ----------------------------------------------------------------
 
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent =
-    projects.length === 0 ? "Nenhum Projeto encontrado" : "Escolha um Projeto";
-  projectSelect.append(placeholder);
+function renderAll(): void {
+  renderFolders();
+  renderList();
+  updateControls();
+}
 
-  for (const project of projects) {
-    const option = document.createElement("option");
-    option.value = project.id;
-    option.textContent = project.name;
-    projectSelect.append(option);
+function renderFolders(): void {
+  const counts = countByFolder(inventory, projects);
+  foldersToggle.setAttribute("aria-expanded", String(!foldersCollapsed));
+  foldersActive.textContent = folderLabel(activeFolder);
+  folderList.hidden = foldersCollapsed;
+  dropTarget = null;
+  folderList.replaceChildren(
+    createFolderButton({ kind: "outside_project" }, counts.outsideProject),
+    createFolderButton({ kind: "all" }, counts.all),
+  );
+
+  // Projetos conhecidos na ordem recebida (alfabética); Projetos referenciados
+  // por conversas mas ausentes da lista vêm depois, sem aceitar soltura.
+  const projectIds = [
+    ...projects.map((project) => project.id),
+    ...[...counts.byProject.keys()].filter((id) => !projectNames.has(id)),
+  ];
+  if (projectIds.length > 0) {
+    const separator = document.createElement("div");
+    separator.className = "folder-separator";
+    folderList.append(separator);
+  }
+  for (const projectId of projectIds) {
+    folderList.append(
+      createFolderButton({ kind: "project", projectId }, counts.byProject.get(projectId) ?? 0),
+    );
+  }
+}
+
+function createFolderButton(folder: ConversationFolder, count: number): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = isActiveFolder(folder) ? "folder active" : "folder";
+  button.setAttribute("aria-pressed", String(isActiveFolder(folder)));
+
+  const name = document.createElement("span");
+  name.className = "folder-name";
+  name.textContent = folderLabel(folder);
+  const countElement = document.createElement("span");
+  countElement.className = "folder-count";
+  countElement.textContent = String(count);
+  button.append(name, countElement);
+  button.addEventListener("click", () => setActiveFolder(folder));
+
+  if (folder.kind === "project" && projectNames.has(folder.projectId)) {
+    const projectId = folder.projectId;
+    button.dataset.projectId = projectId;
+    button.dataset.count = String(count);
+    button.addEventListener("dragover", (event) => {
+      if (draggedIds === null || busy) {
+        return;
+      }
+      event.preventDefault();
+      if (event.dataTransfer !== null) {
+        event.dataTransfer.dropEffect = "move";
+      }
+      setDropTarget(button);
+    });
+    button.addEventListener("drop", (event) => {
+      event.preventDefault();
+      const ids = draggedIds;
+      endDrag();
+      if (ids !== null && ids.length > 0) {
+        void runMove(ids, projectId);
+      }
+    });
   }
 
-  projectSelect.disabled = projects.length === 0;
-  updateActions();
+  return button;
 }
 
-async function moveSelected(): Promise<void> {
-  await runMove([...selectedIds], projectSelect.value);
+function renderList(): void {
+  // Recriar as linhas durante um arraste removeria o elemento de origem e o
+  // `dragend` nunca chegaria; a renderização fica para o fim do arraste.
+  if (draggedIds !== null) {
+    renderDeferred = true;
+    return;
+  }
+
+  const rows = visibleRows();
+  conversationList.replaceChildren();
+
+  if (rows.length === 0) {
+    conversationList.append(createEmptyState(emptyListMessage()));
+    return;
+  }
+
+  for (const row of rows) {
+    conversationList.append(createRow(row));
+  }
 }
 
-async function runMove(
-  conversationIds: string[],
-  destinationProjectId: string,
-): Promise<void> {
+function emptyListMessage(): string {
+  if (inventory.length === 0) {
+    return "Nenhuma conversa encontrada.";
+  }
+  if (searchMode === "content" && contentSearch !== null) {
+    return "Nenhum resultado da pesquisa nesta pasta.";
+  }
+  if (searchMode === "title" && searchQuery.value.trim().length > 0) {
+    return "Nenhum título corresponde ao filtro nesta pasta.";
+  }
+  return "Esta pasta está vazia.";
+}
+
+function createRow(row: VisibleRow): HTMLDivElement {
+  return row.kind === "missing"
+    ? createMissingRow(row.hit)
+    : createConversationRow(row.conversation, row.snippet);
+}
+
+function createMissingRow(hit: ConversationSearchHit): HTMLDivElement {
+  const element = document.createElement("div");
+  element.className = "conversation conversation-missing";
+
+  const placeholder = document.createElement("span");
+  placeholder.className = "checkbox-placeholder";
+  const content = document.createElement("span");
+  content.className = "conversation-content";
+  const title = document.createElement("span");
+  title.className = "conversation-title";
+  title.textContent = hit.title;
+  const meta = document.createElement("span");
+  meta.className = "conversation-meta";
+  meta.textContent = "Fora da listagem local · atualize para organizar";
+  content.append(title, meta);
+  if (hit.snippet.length > 0) {
+    content.append(createSnippet(hit.snippet));
+  }
+
+  element.append(placeholder, content);
+  return element;
+}
+
+function createConversationRow(
+  conversation: Conversation,
+  snippet: string | null,
+): HTMLDivElement {
+  const id = conversation.id;
+  const selectable = conversation.projectId === null;
+  const pending = isPending(id);
+  const element = document.createElement("div");
+  element.className = "conversation";
+  element.classList.toggle("conversation-in-project", !selectable);
+  element.classList.toggle("conversation-pending", pending);
+  element.classList.toggle("selected", selectedIds.has(id));
+  element.dataset.conversationId = id;
+  element.setAttribute("aria-busy", String(pending));
+
+  if (selectable) {
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = selectedIds.has(id);
+    checkbox.disabled = pending;
+    checkbox.setAttribute("aria-label", `Selecionar: ${conversation.title}`);
+    checkbox.addEventListener("click", (event) => {
+      event.stopPropagation();
+      handleSelectionClick(id, event.shiftKey, checkbox.checked, element);
+    });
+    element.append(checkbox);
+
+    // A linha inteira funciona como área de seleção, exceto botões e detalhes.
+    element.addEventListener("click", (event) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("button, input, .conversation-details") !== null
+      ) {
+        return;
+      }
+      handleSelectionClick(id, event.shiftKey, !selectedIds.has(id), element);
+    });
+
+    element.draggable = !busy;
+    element.addEventListener("dragstart", (event) => startDrag(event, id));
+    element.addEventListener("dragend", endDrag);
+  } else {
+    const placeholder = document.createElement("span");
+    placeholder.className = "checkbox-placeholder";
+    element.append(placeholder);
+  }
+
+  const content = document.createElement("span");
+  content.className = "conversation-content";
+  const title = document.createElement("span");
+  title.className = "conversation-title";
+  title.textContent = conversation.title;
+  const meta = document.createElement("span");
+  meta.className = "conversation-meta";
+  const location = selectable
+    ? "Sem projeto"
+    : (projectNames.get(conversation.projectId ?? "") ?? "Projeto não listado");
+  const metaParts = [location];
+  if (conversation.updatedAt !== null) {
+    metaParts.push(formatDate(conversation.updatedAt));
+  }
+  if (pending) {
+    metaParts.unshift(pendingOperation?.kind === "delete" ? "Excluindo…" : "Movendo…");
+  }
+  meta.textContent = metaParts.join(" · ");
+  content.append(title, meta);
+  if (snippet !== null && snippet.length > 0) {
+    content.append(createSnippet(snippet));
+  }
+  element.append(content);
+
+  const expanded = expandedIds.has(id);
+  const expandButton = document.createElement("button");
+  expandButton.type = "button";
+  expandButton.className = "icon-button expand-button";
+  expandButton.setAttribute("aria-expanded", String(expanded));
+  expandButton.setAttribute("aria-label", `Mostrar contexto: ${conversation.title}`);
+  expandButton.title = expanded ? "Ocultar contexto" : "Mostrar contexto";
+  expandButton.append(createIcon("M6 9l6 6 6-6"));
+  expandButton.addEventListener("click", () => toggleExpanded(id));
+  element.append(expandButton);
+
+  if (selectable) {
+    const deleteRowButton = document.createElement("button");
+    deleteRowButton.type = "button";
+    deleteRowButton.className = "icon-button";
+    deleteRowButton.append(createIcon("M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"));
+    deleteRowButton.setAttribute("aria-label", `Excluir conversa: ${conversation.title}`);
+    deleteRowButton.title = "Excluir conversa";
+    deleteRowButton.disabled = busy;
+    deleteRowButton.addEventListener("click", () => void deleteConversations([id]));
+    element.append(deleteRowButton);
+  }
+
+  if (expanded) {
+    element.append(createDetails(conversation));
+  }
+
+  return element;
+}
+
+function createSnippet(text: string): HTMLSpanElement {
+  const snippet = document.createElement("span");
+  snippet.className = "conversation-preview";
+  snippet.textContent = text;
+  return snippet;
+}
+
+function createDetails(conversation: Conversation): HTMLDivElement {
+  const details = document.createElement("div");
+  details.className = "conversation-details";
+  const state = contextStates.get(conversation.id);
+
+  if (state === undefined || state.status === "loading") {
+    details.append("Carregando contexto…");
+  } else if (state.status === "error") {
+    details.append(state.message);
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "text-button";
+    retry.textContent = "Tentar novamente";
+    retry.addEventListener("click", () => void loadContext(conversation.id));
+    details.append(retry);
+  } else {
+    details.append(
+      createContextBlock("Você", state.context.firstUserMessage, "Sem mensagem de texto."),
+      createContextBlock(
+        "ChatGPT · última resposta",
+        state.context.lastAssistantMessage,
+        "Sem resposta de texto.",
+      ),
+    );
+  }
+
+  const footer = document.createElement("div");
+  footer.className = "context-footer";
+  const dates: string[] = [];
+  if (conversation.createdAt !== null) {
+    dates.push(`Criada ${formatDate(conversation.createdAt)}`);
+  }
+  if (conversation.updatedAt !== null) {
+    dates.push(`Atualizada ${formatDate(conversation.updatedAt)}`);
+  }
+  const dateText = document.createElement("span");
+  dateText.textContent = dates.join(" · ");
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.className = "text-button";
+  openButton.textContent = "Abrir ↗";
+  openButton.title = "Abrir conversa na aba ativa";
+  openButton.addEventListener("click", () => void openConversation(conversation.id));
+  footer.append(dateText, openButton);
+  details.append(footer);
+
+  return details;
+}
+
+function createContextBlock(label: string, text: string, fallback: string): HTMLDivElement {
+  const block = document.createElement("div");
+  const labelElement = document.createElement("span");
+  labelElement.className = "context-label";
+  labelElement.textContent = label;
+  const textElement = document.createElement("span");
+  textElement.className = "context-text";
+  textElement.textContent = text.length > 0 ? text : fallback;
+  block.append(labelElement, textElement);
+  return block;
+}
+
+function createIcon(pathData: string): SVGSVGElement {
+  const namespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(namespace, "svg");
+  svg.setAttribute("width", "15");
+  svg.setAttribute("height", "15");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(namespace, "path");
+  path.setAttribute("d", pathData);
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.8");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.append(path);
+  return svg;
+}
+
+// Substitui somente a linha afetada, preservando rolagem e foco do restante.
+function replaceRow(conversationId: string): void {
+  if (draggedIds !== null) {
+    renderDeferred = true;
+    return;
+  }
+  const element = conversationList.querySelector(
+    `[data-conversation-id="${CSS.escape(conversationId)}"]`,
+  );
+  const row = visibleRows().find(
+    (candidate) =>
+      candidate.kind === "conversation" && candidate.conversation.id === conversationId,
+  );
+  if (element !== null && row !== undefined) {
+    element.replaceWith(createRow(row));
+  }
+}
+
+// --- Contexto ---------------------------------------------------------------------
+
+function toggleExpanded(conversationId: string): void {
+  if (expandedIds.has(conversationId)) {
+    expandedIds.delete(conversationId);
+    replaceRow(conversationId);
+    return;
+  }
+
+  expandedIds.add(conversationId);
+  const state = contextStates.get(conversationId);
+  if (state === undefined || state.status === "error") {
+    void loadContext(conversationId);
+  } else {
+    replaceRow(conversationId);
+  }
+}
+
+// Uma chamada por conversa por sessão do painel; o detalhe passa pela mesma fila
+// serial e pelo tratamento de rate limit das demais chamadas.
+async function loadContext(conversationId: string): Promise<void> {
+  contextStates.set(conversationId, { status: "loading" });
+  replaceRow(conversationId);
+
+  try {
+    const context = await sendMessage<ConversationContext>({
+      type: "get-conversation-context",
+      conversationId,
+    });
+    contextStates.set(conversationId, { status: "loaded", context });
+  } catch (error) {
+    contextStates.set(conversationId, { status: "error", message: errorMessage(error) });
+  }
+  replaceRow(conversationId);
+}
+
+async function openConversation(conversationId: string): Promise<void> {
+  try {
+    await sendMessage<{ opened: true }>({ type: "open-conversation", conversationId });
+  } catch (error) {
+    showNotice(errorMessage(error), true);
+  }
+}
+
+// --- Seleção ------------------------------------------------------------------------
+
+function handleSelectionClick(
+  conversationId: string,
+  withShift: boolean,
+  checked: boolean,
+  element: HTMLDivElement,
+): void {
+  if (isPending(conversationId)) {
+    return;
+  }
+
+  if (withShift && selectionAnchorId !== null) {
+    const orderedIds = visibleConversations().map((conversation) => conversation.id);
+    const selectable = new Set([...selectableIds()].filter((id) => !isPending(id)));
+    const range = selectRange(orderedIds, selectionAnchorId, conversationId, selectable);
+    for (const id of range) {
+      if (checked) {
+        selectedIds.add(id);
+      } else {
+        selectedIds.delete(id);
+      }
+    }
+    selectionAnchorId = conversationId;
+    renderList();
+    updateControls();
+    return;
+  }
+
+  if (checked) {
+    selectedIds.add(conversationId);
+  } else {
+    selectedIds.delete(conversationId);
+  }
+  selectionAnchorId = conversationId;
+  element.classList.toggle("selected", checked);
+  const checkbox = element.querySelector<HTMLInputElement>("input[type=checkbox]");
+  if (checkbox !== null) {
+    checkbox.checked = checked;
+  }
+  updateControls();
+}
+
+function toggleVisibleSelection(): void {
+  const selectableVisible = visibleConversations()
+    .filter((conversation) => conversation.projectId === null && !isPending(conversation.id))
+    .map((conversation) => conversation.id);
+  const allVisibleSelected =
+    selectableVisible.length > 0 && selectableVisible.every((id) => selectedIds.has(id));
+
+  for (const id of selectableVisible) {
+    if (allVisibleSelected) {
+      selectedIds.delete(id);
+    } else {
+      selectedIds.add(id);
+    }
+  }
+
+  renderList();
+  updateControls();
+}
+
+function clearSelection(): void {
+  // Itens em operação continuam selecionados até a resposta chegar.
+  selectedIds = new Set([...selectedIds].filter((id) => isPending(id)));
+  selectionAnchorId = null;
+  closeMoveMenu();
+  renderList();
+  updateControls();
+}
+
+function isPending(conversationId: string): boolean {
+  return pendingOperation?.ids.has(conversationId) ?? false;
+}
+
+// --- Arrastar e soltar ------------------------------------------------------------
+
+function startDrag(event: DragEvent, conversationId: string): void {
+  if (busy || event.dataTransfer === null) {
+    event.preventDefault();
+    return;
+  }
+
+  draggedIds = dragSet(conversationId, selectedIds);
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", `${draggedIds.length} conversa(s)`);
+
+  const ghost = document.createElement("div");
+  ghost.className = "drag-ghost";
+  ghost.textContent = `Mover ${draggedIds.length} conversa(s)`;
+  document.body.append(ghost);
+  event.dataTransfer.setDragImage(ghost, 12, 12);
+  // A imagem é capturada de forma síncrona; o elemento pode sair logo em seguida.
+  window.setTimeout(() => ghost.remove(), 0);
+
+  document.body.classList.add("dragging");
+  closeMoveMenu();
+  if (foldersCollapsed) {
+    foldersCollapsed = false;
+    renderFolders();
+  }
+}
+
+function endDrag(): void {
+  if (draggedIds === null) {
+    return;
+  }
+  draggedIds = null;
+  clearDropTarget();
+  document.body.classList.remove("dragging");
+  if (renderDeferred) {
+    renderDeferred = false;
+    renderList();
+  }
+}
+
+function setDropTarget(button: HTMLButtonElement): void {
+  if (dropTarget === button || draggedIds === null) {
+    return;
+  }
+  clearDropTarget();
+  dropTarget = button;
+  button.classList.add("drop-target");
+  const count = button.querySelector(".folder-count");
+  if (count !== null) {
+    count.textContent = `Mover ${draggedIds.length} aqui`;
+  }
+}
+
+function clearDropTarget(): void {
+  if (dropTarget === null) {
+    return;
+  }
+  dropTarget.classList.remove("drop-target");
+  const count = dropTarget.querySelector(".folder-count");
+  if (count !== null) {
+    count.textContent = dropTarget.dataset.count ?? "";
+  }
+  dropTarget = null;
+}
+
+// --- Mover para… ------------------------------------------------------------------
+
+function toggleMoveMenu(): void {
+  if (!moveMenu.hidden) {
+    closeMoveMenu();
+    return;
+  }
+  moveMenu.hidden = false;
+  moveOpenButton.setAttribute("aria-expanded", "true");
+  moveFilter.value = "";
+  renderMoveOptions();
+  moveFilter.focus();
+}
+
+function closeMoveMenu(): void {
+  moveMenu.hidden = true;
+  moveOpenButton.setAttribute("aria-expanded", "false");
+}
+
+function renderMoveOptions(): void {
+  const query = moveFilter.value.trim().toLocaleLowerCase("pt-BR");
+  const matches = projects.filter((project) =>
+    project.name.toLocaleLowerCase("pt-BR").includes(query),
+  );
+  moveOptions.replaceChildren();
+
+  if (matches.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "move-empty";
+    empty.textContent = projects.length === 0 ? "Nenhum Projeto encontrado." : "Nenhum Projeto corresponde.";
+    moveOptions.append(empty);
+    return;
+  }
+
+  for (const project of matches) {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "move-option";
+    option.setAttribute("role", "option");
+    option.textContent = project.name;
+    option.addEventListener("click", () => {
+      closeMoveMenu();
+      void runMove([...selectedIds], project.id);
+    });
+    moveOptions.append(option);
+  }
+}
+
+// --- Operações ----------------------------------------------------------------------
+
+async function runMove(conversationIds: string[], destinationProjectId: string): Promise<void> {
   if (conversationIds.length === 0 || destinationProjectId.length === 0 || busy) {
     return;
   }
 
+  pendingOperation = { kind: "move", ids: new Set(conversationIds) };
   setBusy(true, `Movendo ${conversationIds.length} conversa(s)…`);
   hideNotice();
 
@@ -245,55 +1044,13 @@ async function runMove(
   } catch (error) {
     showNotice(errorMessage(error), true);
   } finally {
+    pendingOperation = null;
     setBusy(false);
     await refreshDebugSafely();
   }
 }
 
 function applyMoveResult(result: MoveBatchResult): void {
-  const succeededIds = new Set(
-    result.items
-      .filter((item) => item.status === "success" || item.status === "skipped")
-      .map((item) => item.conversationId),
-  );
-  const successCount = result.items.filter((item) => item.status === "success").length;
-  const skippedCount = result.items.filter((item) => item.status === "skipped").length;
-  const failedIds = result.items
-    .filter((item) => item.status === "failure")
-    .map((item) => item.conversationId);
-  const failedCount = failedIds.length;
-
-  searchCache.removeConversations(succeededIds);
-  recordCacheEvent("items_removed", { count: succeededIds.size });
-
-  conversations = conversations.filter((conversation) => !succeededIds.has(conversation.id));
-  selectedIds = new Set(
-    [...selectedIds].filter((conversationId) => !succeededIds.has(conversationId)),
-  );
-  renderConversations();
-  updateActions();
-
-  const parts = [`${successCount} movida(s)`];
-  if (skippedCount > 0) {
-    parts.push(`${skippedCount} ignorada(s) por já estar(em) em Projeto`);
-  }
-  if (failedCount > 0) {
-    parts.push(`${failedCount} falha(s)`);
-  }
-  // Itens que falharam permanecem selecionados; a retentativa age exatamente
-  // sobre eles, nunca sobre a seleção inteira.
-  showNotice(`${parts.join(" · ")}.`, failedCount > 0, retryAction(failedIds, () => {
-    void runMove(failedIds, result.destinationProjectId);
-  }));
-
-  syncInventoryAfterMove(result);
-}
-
-function syncInventoryAfterMove(result: MoveBatchResult): void {
-  if (!inventoryLoaded) {
-    return;
-  }
-
   const projectByConversation = new Map<string, string>();
   for (const item of result.items) {
     if (item.status === "success") {
@@ -302,257 +1059,32 @@ function syncInventoryAfterMove(result: MoveBatchResult): void {
       projectByConversation.set(item.conversationId, item.projectId);
     }
   }
-
-  if (projectByConversation.size === 0) {
-    return;
-  }
+  const successCount = result.items.filter((item) => item.status === "success").length;
+  const skippedCount = result.items.filter((item) => item.status === "skipped").length;
+  const failedIds = result.items
+    .filter((item) => item.status === "failure")
+    .map((item) => item.conversationId);
 
   inventory = inventory.map((conversation) => {
     const projectId = projectByConversation.get(conversation.id);
     return projectId === undefined ? conversation : { ...conversation, projectId };
   });
-  allSelectedIds = new Set(
-    [...allSelectedIds].filter((id) => !projectByConversation.has(id)),
-  );
-  renderInventory();
-}
+  // Itens que falharam permanecem selecionados; a retentativa age exatamente
+  // sobre eles, nunca sobre a seleção inteira.
+  selectedIds = new Set([...selectedIds].filter((id) => !projectByConversation.has(id)));
+  renderAll();
 
-function setActiveTab(tab: "organize" | "all"): void {
-  const isAll = tab === "all";
-  viewOrganize.hidden = isAll;
-  viewAll.hidden = !isAll;
-  tabOrganizeButton.classList.toggle("active", !isAll);
-  tabAllButton.classList.toggle("active", isAll);
-  tabOrganizeButton.setAttribute("aria-selected", String(!isAll));
-  tabAllButton.setAttribute("aria-selected", String(isAll));
-
-  // Abrir a aba só lê o cache local; a busca no ChatGPT é sempre manual.
-  if (isAll && !inventoryCacheChecked && !busy) {
-    void loadCachedInventory();
+  const destination = projectNames.get(result.destinationProjectId) ?? "o Projeto";
+  const parts = [`${successCount} movida(s) para «${destination}»`];
+  if (skippedCount > 0) {
+    parts.push(`${skippedCount} ignorada(s) por já estar(em) em Projeto`);
   }
-}
-
-function setScopeFilter(filter: ConversationScopeFilter): void {
-  scopeFilter = filter;
-  chipOutside.classList.toggle("active", filter === "outside_project");
-  chipIn.classList.toggle("active", filter === "in_project");
-  chipAll.classList.toggle("active", filter === "all");
-  renderInventory();
-}
-
-async function loadCachedInventory(): Promise<void> {
-  inventoryCacheChecked = true;
-
-  try {
-    const result = await sendMessage<{ inventory: ConversationInventory | null }>({
-      type: "get-cached-conversations",
-    });
-    if (result.inventory !== null) {
-      applyInventory(result.inventory);
-      return;
-    }
-    allList.replaceChildren(
-      createLoadPrompt("Nenhum dado local disponível.", "Carregar conversas"),
-    );
-  } catch (error) {
-    showNotice(errorMessage(error), true);
+  if (failedIds.length > 0) {
+    parts.push(`${failedIds.length} falha(s)`);
   }
-}
-
-// Empty state com a ação principal embutida: enquanto não há dados, o próprio
-// espaço vazio da lista convida ao carregamento.
-function createLoadPrompt(message: string, label: string): HTMLDivElement {
-  const element = document.createElement("div");
-  element.className = "empty-state";
-
-  const text = document.createElement("p");
-  text.textContent = message;
-
-  const action = document.createElement("button");
-  action.className = "button button-primary";
-  action.type = "button";
-  action.textContent = label;
-  action.style.marginTop = "10px";
-  action.addEventListener("click", () => void loadInventory());
-
-  element.append(text, action);
-  return element;
-}
-
-async function loadInventory(): Promise<void> {
-  if (busy) {
-    return;
-  }
-
-  setBusy(true, "Carregando todas as conversas…");
-  hideNotice();
-  if (!inventoryLoaded) {
-    allList.replaceChildren(createEmptyState("Carregando conversas do ChatGPT…"));
-  }
-
-  try {
-    const result = await sendMessage<ConversationInventory>({
-      type: "list-all-conversations",
-      refresh: true,
-    });
-    applyInventory(result);
-  } catch (error) {
-    if (!inventoryLoaded) {
-      allList.replaceChildren(
-        createLoadPrompt("Não foi possível carregar as conversas.", "Tentar novamente"),
-      );
-    }
-    showNotice(errorMessage(error), true);
-  } finally {
-    setBusy(false);
-    await refreshDebugSafely();
-  }
-}
-
-function applyInventory(result: ConversationInventory): void {
-  inventory = result.conversations;
-  inventoryProjects = new Map(result.projects.map((project) => [project.id, project.name]));
-  inventoryFetchedAt = result.fetchedAt;
-  inventoryLoaded = true;
-  allControls.hidden = false;
-
-  // Reconciliação preserva a seleção manual por interseção: somente ids que
-  // permanecem existentes e fora de projeto continuam selecionados.
-  const selectable = new Set(
-    inventory
-      .filter((conversation) => conversation.projectId === null)
-      .map((conversation) => conversation.id),
-  );
-  const previousSize = allSelectedIds.size;
-  allSelectedIds = new Set([...allSelectedIds].filter((id) => selectable.has(id)));
-  const removed = previousSize - allSelectedIds.size;
-  if (removed > 0) {
-    showNotice(
-      `${removed} conversa(s) saíram da seleção porque foram removidas ou entraram em Projetos.`,
-      false,
-    );
-  }
-
-  renderInventory();
-}
-
-function visibleInventory(): Conversation[] {
-  const scoped = filterByScope(inventory, scopeFilter);
-  const query = allFilterText.value.trim().toLocaleLowerCase("pt-BR");
-  if (query.length === 0) {
-    return scoped;
-  }
-  return scoped.filter((conversation) =>
-    conversation.title.toLocaleLowerCase("pt-BR").includes(query),
-  );
-}
-
-function renderInventory(): void {
-  if (!inventoryLoaded) {
-    updateAllControls([]);
-    return;
-  }
-
-  const visible = visibleInventory();
-  allList.replaceChildren();
-
-  if (visible.length === 0) {
-    allList.append(
-      createEmptyState(
-        inventory.length === 0
-          ? "Nenhuma conversa encontrada."
-          : "Nenhuma conversa corresponde aos filtros atuais.",
-      ),
-    );
-  } else {
-    for (const conversation of visible) {
-      allList.append(createInventoryRow(conversation));
-    }
-  }
-
-  updateAllControls(visible);
-}
-
-function createInventoryRow(conversation: Conversation): HTMLDivElement {
-  const row = document.createElement("div");
-  const inProject = conversation.projectId !== null;
-  row.className = inProject
-    ? "conversation conversation-compact conversation-in-project"
-    : allSelectedIds.has(conversation.id)
-      ? "conversation conversation-compact selected"
-      : "conversation conversation-compact";
-
-  if (inProject) {
-    const placeholder = document.createElement("span");
-    placeholder.className = "checkbox-placeholder";
-    row.append(placeholder);
-  } else {
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = allSelectedIds.has(conversation.id);
-    checkbox.setAttribute("aria-label", `Selecionar: ${conversation.title}`);
-    checkbox.addEventListener("change", () => {
-      if (checkbox.checked) {
-        allSelectedIds.add(conversation.id);
-      } else {
-        allSelectedIds.delete(conversation.id);
-      }
-      row.classList.toggle("selected", checkbox.checked);
-      updateAllControls(visibleInventory());
-    });
-    row.append(checkbox);
-  }
-
-  const content = document.createElement("span");
-  content.className = "conversation-content";
-  const title = document.createElement("span");
-  title.className = "conversation-title";
-  title.textContent = conversation.title;
-  const meta = document.createElement("span");
-  meta.className = "conversation-meta";
-  const location = inProject
-    ? (inventoryProjects.get(conversation.projectId ?? "") ?? "Projeto")
-    : "Sem projeto";
-  meta.textContent =
-    conversation.updatedAt === null
-      ? location
-      : `${location} · ${formatDate(conversation.updatedAt)}`;
-  content.append(title, meta);
-  row.append(content);
-
-  if (!inProject) {
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "icon-button";
-    deleteButton.type = "button";
-    deleteButton.textContent = "🗑";
-    deleteButton.setAttribute("aria-label", `Excluir conversa: ${conversation.title}`);
-    deleteButton.title = "Excluir conversa";
-    deleteButton.addEventListener("click", () => void deleteConversations([conversation.id]));
-    row.append(deleteButton);
-  }
-
-  return row;
-}
-
-function toggleVisibleSelection(): void {
-  const selectableVisible = visibleInventory()
-    .filter((conversation) => conversation.projectId === null)
-    .map((conversation) => conversation.id);
-  const allVisibleSelected =
-    selectableVisible.length > 0 &&
-    selectableVisible.every((id) => allSelectedIds.has(id));
-
-  if (allVisibleSelected) {
-    for (const id of selectableVisible) {
-      allSelectedIds.delete(id);
-    }
-  } else {
-    for (const id of selectableVisible) {
-      allSelectedIds.add(id);
-    }
-  }
-
-  renderInventory();
+  showNotice(`${parts.join(" · ")}.`, failedIds.length > 0, retryAction(failedIds, () => {
+    void runMove(failedIds, result.destinationProjectId);
+  }));
 }
 
 async function deleteConversations(conversationIds: string[]): Promise<void> {
@@ -567,18 +1099,17 @@ async function deleteConversations(conversationIds: string[]): Promise<void> {
     return;
   }
 
+  pendingOperation = { kind: "delete", ids: new Set(conversationIds) };
   setBusy(true, `Excluindo ${conversationIds.length} conversa(s)…`);
   hideNotice();
 
   try {
-    const result = await sendMessage<DeleteBatchResult>({
-      type: "delete",
-      conversationIds,
-    });
+    const result = await sendMessage<DeleteBatchResult>({ type: "delete", conversationIds });
     applyDeleteResult(result);
   } catch (error) {
     showNotice(errorMessage(error), true);
   } finally {
+    pendingOperation = null;
     setBusy(false);
     await refreshDebugSafely();
   }
@@ -586,21 +1117,16 @@ async function deleteConversations(conversationIds: string[]): Promise<void> {
 
 function applyDeleteResult(result: DeleteBatchResult): void {
   const deletedIds = new Set(
-    result.items
-      .filter((item) => item.status === "success")
-      .map((item) => item.conversationId),
+    result.items.filter((item) => item.status === "success").map((item) => item.conversationId),
   );
   const skippedProjects = new Map(
     result.items
       .filter((item) => item.status === "skipped")
       .map((item) => [item.conversationId, item.projectId] as const),
   );
-  const successCount = deletedIds.size;
-  const skippedCount = skippedProjects.size;
   const failedIds = result.items
     .filter((item) => item.status === "failure")
     .map((item) => item.conversationId);
-  const failedCount = failedIds.length;
 
   inventory = inventory
     .filter((conversation) => !deletedIds.has(conversation.id))
@@ -608,32 +1134,33 @@ function applyDeleteResult(result: DeleteBatchResult): void {
       const projectId = skippedProjects.get(conversation.id);
       return projectId === undefined ? conversation : { ...conversation, projectId };
     });
-  allSelectedIds = new Set(
-    [...allSelectedIds].filter(
-      (id) => !deletedIds.has(id) && !skippedProjects.has(id),
-    ),
+  selectedIds = new Set(
+    [...selectedIds].filter((id) => !deletedIds.has(id) && !skippedProjects.has(id)),
   );
+  for (const id of deletedIds) {
+    expandedIds.delete(id);
+    contextStates.delete(id);
+  }
 
-  // Conversas excluídas também deixam de existir para a aba de organização.
   searchCache.removeConversations(deletedIds);
   recordCacheEvent("items_removed", { count: deletedIds.size });
-  conversations = conversations.filter((conversation) => !deletedIds.has(conversation.id));
-  selectedIds = new Set([...selectedIds].filter((id) => !deletedIds.has(id)));
-
-  renderConversations();
-  updateActions();
-  renderInventory();
-
-  const parts = [`${successCount} excluída(s)`];
-  if (skippedCount > 0) {
-    parts.push(`${skippedCount} ignorada(s) por estar(em) em Projeto`);
+  if (contentSearch !== null) {
+    contentSearch = {
+      ...contentSearch,
+      hits: contentSearch.hits.filter((hit) => !deletedIds.has(hit.id)),
+    };
   }
-  if (failedCount > 0) {
-    parts.push(`${failedCount} falha(s)`);
+  renderAll();
+
+  const parts = [`${deletedIds.size} excluída(s)`];
+  if (skippedProjects.size > 0) {
+    parts.push(`${skippedProjects.size} ignorada(s) por estar(em) em Projeto`);
   }
-  // A retentativa passa pelo mesmo fluxo, então a confirmação da exclusão
-  // continua sendo exigida.
-  showNotice(`${parts.join(" · ")}.`, failedCount > 0, retryAction(failedIds, () => {
+  if (failedIds.length > 0) {
+    parts.push(`${failedIds.length} falha(s)`);
+  }
+  // A retentativa passa pelo mesmo fluxo, então a confirmação continua exigida.
+  showNotice(`${parts.join(" · ")}.`, failedIds.length > 0, retryAction(failedIds, () => {
     void deleteConversations(failedIds);
   }));
 }
@@ -644,32 +1171,82 @@ function retryAction(failedIds: string[], run: () => void): NoticeAction | undef
     : { label: `Tentar novamente (${failedIds.length})`, run };
 }
 
-function updateAllControls(visible: Conversation[]): void {
-  const selectableVisible = visible.filter(
-    (conversation) => conversation.projectId === null,
-  );
+// --- Controles -----------------------------------------------------------------------
+
+function updateControls(): void {
+  if (!inventoryLoaded) {
+    return;
+  }
+
+  const visible = visibleConversations();
+  const visibleIds = new Set(visible.map((conversation) => conversation.id));
+  const selectableVisible = visible.filter((conversation) => conversation.projectId === null);
   const allVisibleSelected =
     selectableVisible.length > 0 &&
-    selectableVisible.every((conversation) => allSelectedIds.has(conversation.id));
+    selectableVisible.every((conversation) => selectedIds.has(conversation.id));
 
-  allSummary.textContent = inventoryLoaded
-    ? `${inventory.length} conversa(s) · ${visible.length} visível(is) · ${allSelectedIds.size} selecionada(s)`
-    : "Nenhuma conversa carregada";
-  allFreshness.textContent =
-    inventoryFetchedAt !== null ? `Atualizado ${formatAge(inventoryFetchedAt)}` : "";
-  allSelectVisible.textContent = allVisibleSelected
+  listSummary.textContent = `${visible.length} nesta visão · ${inventory.length} no total`;
+  freshness.textContent = fetchedAt !== null ? `Sincronizado ${formatAge(fetchedAt)}` : "";
+  selectVisibleButton.textContent = allVisibleSelected
     ? "Desmarcar visíveis"
     : "Selecionar visíveis";
-  allSelectVisible.disabled = busy || selectableVisible.length === 0;
-  allFilterText.disabled = busy || !inventoryLoaded;
-  allRefreshButton.disabled = busy;
+  selectVisibleButton.disabled = busy || selectableVisible.length === 0;
+  searchSubmit.disabled = busy;
+  updateSearchNote(visible.length);
 
-  allActions.classList.toggle("visible", allSelectedIds.size > 0);
-  allSelectionSummary.textContent = `${allSelectedIds.size} conversa(s) fora de projeto`;
-  allClearButton.disabled = busy;
-  allDeleteButton.disabled = busy || allSelectedIds.size === 0;
-  allDeleteButton.textContent =
-    allSelectedIds.size > 0 ? `Excluir (${allSelectedIds.size})` : "Excluir";
+  const hiddenSelected = [...selectedIds].filter((id) => !visibleIds.has(id)).length;
+  actionBar.classList.toggle("visible", selectedIds.size > 0);
+  selectionSummary.textContent =
+    hiddenSelected > 0
+      ? `${selectedIds.size} selecionada(s) · ${hiddenSelected} fora desta visão`
+      : `${selectedIds.size} selecionada(s)`;
+  moveOpenButton.disabled = busy || projects.length === 0;
+  deleteButton.disabled = busy || selectedIds.size === 0;
+  deleteButton.textContent = selectedIds.size > 0 ? `Excluir (${selectedIds.size})` : "Excluir";
+  clearButton.disabled = busy;
+
+  if (selectedIds.size === 0 || busy) {
+    closeMoveMenu();
+  }
+}
+
+function updateSearchNote(visibleCount: number): void {
+  if (searchMode === "title") {
+    searchNote.hidden = true;
+    return;
+  }
+
+  searchNote.hidden = false;
+  if (contentSearch === null) {
+    searchNote.textContent = "Pressione Enter para pesquisar no conteúdo das conversas.";
+    return;
+  }
+
+  const parts = [
+    `${contentSearch.hits.length} resultado(s) para «${contentSearch.query}»`,
+    `${visibleCount} nesta pasta`,
+  ];
+  const missing = missingHitCount();
+  if (missing > 0) {
+    parts.push(`${missing} fora da listagem local (aparecem em Todas; atualize para organizar)`);
+  }
+  searchNote.textContent = parts.join(" · ");
+}
+
+function setBusy(value: boolean, label?: string): void {
+  busy = value;
+  setConnection(value ? (label ?? "Processando…") : "Pronto");
+  // Fora de updateControls: o botão existe antes da primeira carga.
+  syncButton.disabled = value;
+  // Linhas refletem o travamento (itens em operação, arraste e exclusão por linha).
+  if (inventoryLoaded) {
+    renderList();
+  }
+  syncButton.title =
+    fetchedAt !== null
+      ? `Buscar novamente todas as conversas e Projetos no ChatGPT · sincronizado ${formatAge(fetchedAt)}`
+      : "Buscar todas as conversas e Projetos no ChatGPT";
+  updateControls();
 }
 
 function formatAge(iso: string): string {
@@ -699,107 +1276,7 @@ function formatDate(iso: string): string {
   return new Date(parsed).toLocaleDateString("pt-BR");
 }
 
-function renderConversations(): void {
-  conversationList.replaceChildren();
-
-  if (conversations.length === 0) {
-    conversationList.append(
-      createEmptyState(
-        filteredCount > 0
-          ? "Todas as conversas encontradas já pertencem a Projetos."
-          : "Nenhuma conversa disponível para esta pesquisa.",
-      ),
-    );
-  } else {
-    for (const conversation of conversations) {
-      conversationList.append(createConversationRow(conversation));
-    }
-  }
-
-  resultSummary.textContent =
-    filteredCount > 0
-      ? `Todas as páginas foram verificadas · ${filteredCount} conversa(s) em Projetos foram ocultadas`
-      : conversations.length > 0
-        ? "Todas as páginas foram verificadas"
-        : "";
-}
-
-function createConversationRow(conversation: Conversation): HTMLDivElement {
-  const row = document.createElement("div");
-  row.className = selectedIds.has(conversation.id)
-    ? "conversation selected"
-    : "conversation";
-
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.checked = selectedIds.has(conversation.id);
-  checkbox.addEventListener("change", () => {
-    if (checkbox.checked) {
-      selectedIds.add(conversation.id);
-    } else {
-      selectedIds.delete(conversation.id);
-    }
-    row.classList.toggle("selected", checkbox.checked);
-    updateActions();
-  });
-
-  const content = document.createElement("span");
-  content.className = "conversation-content";
-  const top = document.createElement("span");
-  top.className = "conversation-top";
-  const title = document.createElement("span");
-  title.className = "conversation-title";
-  title.textContent = conversation.title;
-  const badge = document.createElement("span");
-  badge.className = "badge";
-  badge.textContent = "Fora de Projeto";
-  top.append(title, badge);
-
-  const preview = document.createElement("span");
-  preview.className = "conversation-preview";
-  preview.textContent = conversation.preview || "Sem texto inicial disponível.";
-  content.append(top, preview);
-  row.append(checkbox, content);
-
-  const openButton = document.createElement("button");
-  openButton.className = "conversation-open";
-  openButton.type = "button";
-  openButton.textContent = "↗";
-  openButton.setAttribute("aria-label", `Abrir conversa: ${conversation.title}`);
-  openButton.title = "Abrir conversa nesta aba";
-  openButton.addEventListener("click", () => void openConversation(conversation.id));
-  row.append(openButton);
-
-  return row;
-}
-
-async function openConversation(conversationId: string): Promise<void> {
-  try {
-    await sendMessage<{ opened: true }>({ type: "open-conversation", conversationId });
-  } catch (error) {
-    showNotice(errorMessage(error), true);
-  }
-}
-
-function updateActions(): void {
-  const allSelected =
-    conversations.length > 0 && conversations.every((item) => selectedIds.has(item.id));
-  selectionCount.textContent = `${conversations.length} conversa(s) disponível(is) · ${selectedIds.size} selecionada(s)`;
-  selectAllButton.textContent = allSelected ? "Limpar seleção" : "Selecionar todas";
-  selectAllButton.disabled = busy || conversations.length === 0;
-  projectSelect.disabled = busy || projects.length === 0;
-  projectsLoadButton.disabled = busy;
-  projectsRefreshButton.disabled = busy;
-  moveButton.disabled = busy || selectedIds.size === 0 || projectSelect.value.length === 0;
-  moveButton.textContent =
-    selectedIds.size > 0 ? `Mover ${selectedIds.size} conversa(s)` : "Mover conversas";
-  moveSummary.textContent =
-    selectedIds.size === 0
-      ? "Selecione conversas e um Projeto de destino."
-      : projectSelect.value.length === 0
-        ? `${selectedIds.size} conversa(s) selecionada(s). Escolha o destino.`
-        : `${selectedIds.size} conversa(s) serão revalidadas e movidas.`;
-}
+// --- Debug -----------------------------------------------------------------------------
 
 async function toggleDebug(): Promise<void> {
   const enabled = debugToggle.getAttribute("aria-checked") !== "true";
@@ -835,7 +1312,7 @@ function renderDebug(state: DebugState): void {
   }
 
   debugOutput.replaceChildren();
-  const visibleEvents = state.events.slice(-30);
+  const visibleEvents = state.events.slice(-200);
   if (visibleEvents.length === 0) {
     const empty = document.createElement("div");
     empty.className = "debug-line";
@@ -855,17 +1332,11 @@ function renderDebug(state: DebugState): void {
     }
     debugOutput.append(line);
   }
-  debugOutput.scrollTop = debugOutput.scrollHeight;
+  // A rolagem pertence à aba de debug; os eventos mais recentes ficam visíveis.
+  viewDebug.scrollTop = viewDebug.scrollHeight;
 }
 
-function setBusy(value: boolean, label?: string): void {
-  busy = value;
-  searchButton.disabled = value;
-  searchQuery.disabled = value;
-  setConnection(value ? (label ?? "Processando…") : "Pronto");
-  updateActions();
-  updateAllControls(inventoryLoaded ? visibleInventory() : []);
-}
+// --- Infraestrutura do painel ------------------------------------------------------------
 
 function isProgressEvent(message: unknown): message is ExtensionEvent {
   return (
@@ -974,4 +1445,3 @@ function recordCacheEvent(
     // O cache continua funcional mesmo quando o logger não está disponível.
   });
 }
-

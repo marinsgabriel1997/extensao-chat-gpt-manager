@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { readFileSync } from "node:fs";
+
 import {
   ChatGptClient,
+  conversationContextFromPayload,
   conversationFromPayload,
-  conversationFromSearchPayload,
+  searchHitFromPayload,
 } from "../dist/integration.js";
 
 function jsonResponse(payload) {
@@ -16,19 +19,93 @@ function jsonResponse(payload) {
   };
 }
 
-test("conversationFromSearchPayload usa o snippet retornado pela pesquisa", () => {
-  const conversation = conversationFromSearchPayload({
+test("searchHitFromPayload usa o snippet e converte update_time numérico", () => {
+  const hit = searchHitFromPayload({
     conversation_id: "conversation-search",
     title: "Resultado",
+    update_time: 1700000000,
     payload: { kind: "message", snippet: "Trecho encontrado" },
   });
 
-  assert.deepEqual(conversation, {
+  assert.deepEqual(hit, {
     id: "conversation-search",
     title: "Resultado",
-    preview: "Trecho encontrado",
-    projectId: null,
-    updatedAt: null,
+    snippet: "Trecho encontrado",
+    updatedAt: "2023-11-14T22:13:20.000Z",
+  });
+});
+
+test("conversationFromPayload converte datas numéricas e textuais para ISO 8601", () => {
+  const fromDetail = conversationFromPayload({
+    id: "detail",
+    title: "Detalhe",
+    create_time: 1700000000.5,
+    update_time: "1700000000",
+  });
+  const invalid = conversationFromPayload({
+    id: "invalid",
+    title: "Inválida",
+    create_time: "não é data",
+    update_time: null,
+  });
+
+  assert.equal(fromDetail?.createdAt, "2023-11-14T22:13:20.500Z");
+  assert.equal(fromDetail?.updatedAt, "2023-11-14T22:13:20.000Z");
+  assert.equal(invalid?.createdAt, null);
+  assert.equal(invalid?.updatedAt, null);
+});
+
+test("conversationContextFromPayload extrai a primeira pergunta e a última resposta da captura", () => {
+  const capture = JSON.parse(
+    readFileSync(new URL("../docs/conversation-detail-response.example.json", import.meta.url), "utf8"),
+  );
+
+  const context = conversationContextFromPayload("captura", capture);
+
+  assert.equal(context.conversationId, "captura");
+  assert.notEqual(context.firstUserMessage, "");
+  assert.notEqual(context.lastAssistantMessage, "");
+});
+
+test("conversationContextFromPayload ignora raciocínio, mensagens ocultas e chamadas a ferramentas", () => {
+  const message = (role, contentType, parts, extra = {}) => ({
+    author: { role },
+    content: { content_type: contentType, parts },
+    metadata: {},
+    ...extra,
+  });
+
+  const context = conversationContextFromPayload("c", {
+    current_node: "recap",
+    mapping: {
+      root: { parent: null, message: null },
+      user: { parent: "root", message: message("user", "text", ["Pergunta"]) },
+      answer: { parent: "user", message: message("assistant", "text", ["Resposta final"], { recipient: "all" }) },
+      tool: { parent: "answer", message: message("assistant", "text", ["chamada"], { recipient: "web" }) },
+      hidden: {
+        parent: "tool",
+        message: {
+          ...message("assistant", "text", ["oculta"]),
+          metadata: { is_visually_hidden_from_conversation: true },
+        },
+      },
+      thoughts: { parent: "hidden", message: message("assistant", "thoughts", ["pensando"]) },
+      recap: { parent: "thoughts", message: message("assistant", "reasoning_recap", ["resumo"]) },
+    },
+  });
+
+  assert.deepEqual(context, {
+    conversationId: "c",
+    firstUserMessage: "Pergunta",
+    lastAssistantMessage: "Resposta final",
+  });
+});
+
+test("conversationContextFromPayload devolve textos vazios sem mensagens visíveis", () => {
+  assert.deepEqual(conversationContextFromPayload("vazia", { mapping: null }), {
+    conversationId: "vazia",
+    firstUserMessage: "",
+    lastAssistantMessage: "",
   });
 });
 
@@ -47,6 +124,7 @@ test("conversationFromPayload extrai updatedAt e o vínculo com Projeto da lista
     title: "Listada",
     preview: "",
     projectId: "g-p-project",
+    createdAt: null,
     updatedAt: "2026-07-24T13:00:58.594377Z",
   });
 });

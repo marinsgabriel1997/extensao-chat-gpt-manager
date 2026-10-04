@@ -1,8 +1,7 @@
-import type { Conversation } from "./domain.js";
+import type { ConversationSearchHit } from "./domain.js";
 
 export interface CachedSearchResult {
-  conversations: Conversation[];
-  filteredCount: number;
+  hits: ConversationSearchHit[];
 }
 
 export class SearchSessionCache {
@@ -17,16 +16,17 @@ export class SearchSessionCache {
     this.entries.set(normalizeQuery(query), cloneResult(result));
   }
 
+  // Conversas excluídas deixam de existir; conversas movidas continuam nos
+  // resultados, pois o Projeto de cada uma vem da listagem completa.
   removeConversations(conversationIds: ReadonlySet<string>): void {
     if (conversationIds.size === 0) {
       return;
     }
 
     for (const [query, result] of this.entries) {
-      const remaining = result.conversations.filter(
-        (conversation) => !conversationIds.has(conversation.id),
-      );
-      this.entries.set(query, { ...result, conversations: remaining });
+      this.entries.set(query, {
+        hits: result.hits.filter((hit) => !conversationIds.has(hit.id)),
+      });
     }
   }
 }
@@ -36,9 +36,5 @@ function normalizeQuery(query: string): string {
 }
 
 function cloneResult(result: CachedSearchResult): CachedSearchResult {
-  return {
-    conversations: result.conversations.map((conversation) => ({ ...conversation })),
-    filteredCount: result.filteredCount,
-  };
+  return { hits: result.hits.map((hit) => ({ ...hit })) };
 }
-

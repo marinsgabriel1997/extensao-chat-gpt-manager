@@ -39,6 +39,7 @@
       - `is_starred`
       - `is_temporary_chat`
       - `snippet` (observado sempre `null` nessa listagem)
+    - `create_time`/`update_time` vem como texto ISO 8601 nessa listagem (ex.: `2026-07-24T13:00:58.594377Z`)
     - mesmo com `hide_snorlax=true`, itens retornaram `gizmo_id`/`conversation_template_id` preenchidos com prefixo `g-` (sem `-p-`): sao conversas de GPTs customizados, nao de Projetos
     - isso reforca a distincao ja aplicada na integracao: somente ids com prefixo `g-p-` representam Projetos; `g-...` sem `-p-` nao deve ser tratado como Projeto
   - Comportamento de `hide_snorlax` (observacoes de 2026-08-05, mesma pagina `offset=0&limit=28`):
@@ -58,6 +59,8 @@
   - os itens podem expor `conversation_id` como identificador util para operacoes posteriores
   - nao assumir que o identificador vira em `id`
   - o trecho correspondente a pesquisa foi observado em `item.payload.snippet`
+  - `update_time` vem como numero (epoch em segundos) nos itens da pesquisa
+  - os itens NAO informam `gizmo_id`/`conversation_template_id`: o vinculo com Projeto nao pode ser resolvido pela pesquisa
 
 - `GET /backend-api/conversation/{conversation_id}`
   - Usado para obter detalhe da conversa.
@@ -69,6 +72,9 @@
     - `node.message.content.content_type = "text"`
     - `node.message.content.parts[]`
   - Mensagens com `node.message.metadata.is_visually_hidden_from_conversation = true` nao representam texto visivel da conversa.
+  - Mensagens textuais visiveis do assistente seguem o mesmo formato: `node.message.author.role = "assistant"`, `content_type = "text"`, `parts[]`. Na captura tambem aparecem mensagens do assistente com `content_type` `thoughts`, `reasoning_recap` e `model_editable_context`, e do usuario com `user_editable_context`; nenhuma delas e texto visivel da conversa.
+  - Mensagens do assistente com `recipient` diferente de `"all"` sao enderecadas a ferramentas e nao sao texto para o usuario.
+  - `create_time`/`update_time` vem como numero (epoch em segundos) no detalhe.
   - Conversas fora de Projetos podem ser abertas na rota `/c/{conversation_id}`.
 
 ### Projetos
@@ -239,7 +245,17 @@ Política adotada pela extensão sobre as chamadas acima (2026-08-06):
 - Idempotência de `DELETE /backend-api/conversation/id/{conversation_id}`: um `404` recebido em **retentativa** é tratado como sucesso, porque indica que a exclusão anterior chegou ao servidor e apenas a resposta se perdeu. Um `404` na primeira tentativa permanece falha (`not_found`), pois normalmente indica identificador vindo de cache desatualizado.
 - `PATCH /backend-api/conversation/{conversation_id}` com `gizmo_id` é idempotente por natureza; repetir a chamada é seguro.
 
+### Formato das datas
+
+- As capturas anonimizadas preservam o tipo original dos campos de data (`scripts/anonymize-captures.mjs` substitui numeros por numero e textos por texto). Formatos por endpoint:
+  - listagem geral `/backend-api/conversations`: texto ISO 8601;
+  - detalhe `/backend-api/conversation/{id}` e pesquisa: numero (epoch em segundos, podendo ter fracao);
+  - sidebar e conversas de Projeto: texto (valor numerico em string nas capturas anonimizadas).
+- A integracao normaliza todos para ISO 8601 na fronteira; texto puramente numerico e tratado como epoch em segundos.
+
 ## Pendente
+
+- Confirmar se a rota `/c/{conversation_id}` abre conversas vinculadas a Projetos (documentado apenas para conversas fora de Projetos).
 
 - Confirmar resposta completa de `POST /backend-api/projects`.
 - Confirmar se `DELETE /backend-api/conversation/id/{conversation_id}` funciona somente com `Authorization: Bearer`, sem os demais headers `oai-*`/`chatgpt-account-id`.

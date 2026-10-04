@@ -71,11 +71,14 @@ function progressListener(operation: ExtensionEvent["operation"]): ProgressListe
 async function handleRequest(request: ExtensionRequest): Promise<ResponseData> {
   switch (request.type) {
     case "search":
-      return client.searchEligibleConversations(request.query);
-    case "list-projects":
-      return client.listProjects();
-    case "list-project-names":
-      return client.listProjectNames();
+      return { hits: await client.searchConversations(request.query) };
+    case "get-conversation-context": {
+      const conversationId = request.conversationId.trim();
+      if (conversationId.length === 0) {
+        throw new Error("Identificador de conversa inválido.");
+      }
+      return client.getConversationContext(conversationId);
+    }
     case "open-conversation": {
       const conversationId = request.conversationId.trim();
       if (conversationId.length === 0) {
@@ -146,7 +149,7 @@ async function listAllConversations(refresh: boolean): Promise<ConversationInven
     logger.info("inventory", "cache_miss");
   }
 
-  const projects = await client.listProjectNames();
+  const projects = await client.listProjects();
   const conversations = await client.listAllConversations(progressListener("inventory"));
   const fetchedAt = new Date().toISOString();
   const snapshot = { fetchedAt, conversations, projects };

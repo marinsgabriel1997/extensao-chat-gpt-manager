@@ -18,9 +18,15 @@
         box-sizing: border-box;
       }
 
+      /* Classes com `display` próprio não podem anular o atributo `hidden`. */
+      [hidden] {
+        display: none !important;
+      }
+
       body {
         margin: 0;
         min-width: 320px;
+        overflow: hidden;
         background: #212121;
       }
 
@@ -31,25 +37,26 @@
       }
 
       button,
-      label,
-      select {
+      label {
         cursor: pointer;
       }
 
-      button:disabled,
-      select:disabled {
+      button:disabled {
         cursor: not-allowed;
         opacity: 0.45;
       }
 
+      /* Layout em faixas: topo (cabeçalho, busca, pastas) e barra de seleção
+         ficam fixos; somente a área da lista rola. */
       .app {
-        min-height: 100vh;
+        height: 100vh;
         display: flex;
         flex-direction: column;
       }
 
       .header {
-        padding: 18px 18px 0;
+        flex: none;
+        padding: 14px 16px;
         background: #212121;
         border-bottom: 1px solid #383838;
       }
@@ -57,13 +64,13 @@
       .tabs {
         display: flex;
         gap: 4px;
-        margin-top: 12px;
+        margin: 10px 0 -14px;
       }
 
       .tab {
         border: 0;
         border-bottom: 2px solid transparent;
-        padding: 8px 14px;
+        padding: 8px 12px;
         background: transparent;
         color: #b4b4b4;
         font-size: 12px;
@@ -75,92 +82,21 @@
         border-bottom-color: #f4f4f4;
       }
 
-      .chips {
-        display: flex;
-        gap: 6px;
-        margin-top: 10px;
+      .toolbar {
+        flex: none;
+        padding: 12px 16px 0;
+        border-bottom: 1px solid #383838;
       }
 
-      .chip {
-        padding: 6px 11px;
-        border: 1px solid #424242;
-        border-radius: 999px;
-        background: transparent;
-        color: #b4b4b4;
-        font-size: 11px;
-        font-weight: 650;
-      }
-
-      .chip.active {
-        border-color: #f4f4f4;
-        background: #f4f4f4;
-        color: #212121;
-      }
-
-      .conversation-compact {
-        grid-template-columns: auto minmax(0, 1fr) auto;
-        align-items: center;
-        padding: 10px 12px;
-      }
-
-      .conversation-compact .conversation-meta {
-        margin-top: 3px;
-      }
-
-      .conversation-in-project {
-        opacity: 0.75;
-      }
-
-      .checkbox-placeholder {
-        width: 16px;
-      }
-
-      .icon-button {
-        display: grid;
-        place-items: center;
-        width: 30px;
-        height: 30px;
-        border: 0;
-        border-radius: 8px;
-        background: transparent;
-        color: #b4b4b4;
-      }
-
-      .icon-button:hover,
-      .icon-button:focus-visible {
-        background: #4a4a4a;
-        color: #ffffff;
-        outline: none;
-      }
-
-      .all-actions {
-        position: sticky;
-        bottom: 0;
-        display: none;
-        align-items: center;
-        gap: 10px;
-        margin-top: 12px;
-        padding: 12px 0;
-        background: #212121;
-        border-top: 1px solid #383838;
-      }
-
-      .all-actions.visible {
-        display: flex;
-      }
-
-      .all-actions .selection-count {
+      .scroll-area {
         flex: 1;
-      }
-
-      .all-actions .button {
-        min-height: 36px;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 12px 16px 0;
       }
 
       .brand-row,
-      .section-heading,
       .selection-bar,
-      .conversation-top,
       .debug-heading {
         display: flex;
         align-items: center;
@@ -186,7 +122,6 @@
       }
 
       h1,
-      h2,
       p {
         margin: 0;
       }
@@ -196,12 +131,7 @@
         letter-spacing: -0.01em;
       }
 
-      h2 {
-        font-size: 13px;
-      }
-
       .subtitle,
-      .muted,
       .conversation-meta,
       .debug-line {
         color: #b4b4b4;
@@ -224,6 +154,34 @@
         font-weight: 650;
       }
 
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Única ação colorida do cabeçalho: busca de novo tudo no ChatGPT. */
+      .sync-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 28px;
+        padding: 0 10px;
+        border: 1px solid #10a37f;
+        border-radius: 999px;
+        background: rgb(16 163 127 / 14%);
+        color: #4cd3a8;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .sync-button:hover:not(:disabled),
+      .sync-button:focus-visible {
+        background: #10a37f;
+        color: #ffffff;
+        outline: none;
+      }
+
       .status-dot {
         width: 6px;
         height: 6px;
@@ -231,10 +189,7 @@
         background: #d1d1d1;
       }
 
-      main {
-        flex: 1;
-        padding: 16px;
-      }
+      /* Busca */
 
       .search {
         display: grid;
@@ -242,10 +197,15 @@
         gap: 8px;
       }
 
-      .field,
-      .select {
+      .search-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .field {
         width: 100%;
         min-height: 40px;
+        padding: 0 12px;
         border: 1px solid #424242;
         border-radius: 10px;
         background: #2f2f2f;
@@ -253,14 +213,38 @@
         outline: none;
       }
 
-      .field {
-        padding: 0 12px;
-      }
-
-      .field:focus,
-      .select:focus {
+      .field:focus {
         border-color: #8e8e8e;
         box-shadow: 0 0 0 3px rgb(255 255 255 / 10%);
+      }
+
+      .segmented {
+        display: inline-flex;
+        padding: 3px;
+        border: 1px solid #424242;
+        border-radius: 10px;
+        background: #2f2f2f;
+      }
+
+      .segment {
+        border: 0;
+        border-radius: 7px;
+        padding: 0 10px;
+        background: transparent;
+        color: #b4b4b4;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .segment.active {
+        background: #f4f4f4;
+        color: #212121;
+      }
+
+      .search-note {
+        margin-top: 8px;
+        font-size: 11px;
+        color: #b4b4b4;
       }
 
       .button {
@@ -282,34 +266,6 @@
         color: #ececec;
       }
 
-      .button-accent {
-        width: 100%;
-        background: #f4f4f4;
-        color: #212121;
-      }
-
-      .search-note {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        margin-top: 9px;
-        font-size: 11px;
-        color: #b4b4b4;
-      }
-
-      .search-note svg {
-        flex: 0 0 auto;
-      }
-
-      .selection-bar {
-        margin: 18px 0 10px;
-      }
-
-      .selection-count {
-        font-size: 12px;
-        color: #b4b4b4;
-      }
-
       .text-button {
         border: 0;
         padding: 4px;
@@ -319,20 +275,154 @@
         font-weight: 680;
       }
 
+      /* Pastas ficam no topo fixo para continuarem alcançáveis durante o arraste. */
+
+      .folders {
+        margin-top: 12px;
+        border: 1px solid #383838;
+        border-radius: 12px;
+        background: #262626;
+      }
+
+      .folders-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        padding: 9px 12px;
+        border: 0;
+        background: transparent;
+        color: #ececec;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .folders-toggle::before {
+        content: "▾";
+        color: #9b9b9b;
+      }
+
+      .folders-toggle[aria-expanded="false"]::before {
+        content: "▸";
+      }
+
+      .folders-toggle-label {
+        flex: 1;
+        text-align: left;
+      }
+
+      .folders-active {
+        overflow: hidden;
+        color: #b4b4b4;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .folder-list {
+        display: grid;
+        gap: 2px;
+        max-height: 30vh;
+        overflow-y: auto;
+        padding: 0 6px 6px;
+      }
+
+      .folder {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        padding: 7px 8px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: #d1d1d1;
+        font-size: 12px;
+        text-align: left;
+      }
+
+      /* Filhos sem eventos de ponteiro evitam dragleave falso ao cruzar o texto. */
+      .folder > * {
+        pointer-events: none;
+      }
+
+      .folder:hover {
+        background: #333333;
+      }
+
+      .folder.active {
+        background: #3a3a3a;
+        color: #ffffff;
+        font-weight: 680;
+      }
+
+      .folder-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .folder-count {
+        flex: 0 0 auto;
+        color: #9b9b9b;
+        font-size: 11px;
+      }
+
+      .folder-separator {
+        height: 1px;
+        margin: 4px 8px;
+        background: #383838;
+      }
+
+      .dragging .folder[data-project-id] {
+        border-style: dashed;
+        border-color: #4a4a4a;
+      }
+
+      .folder.drop-target {
+        border-style: solid !important;
+        border-color: #f4f4f4 !important;
+        background: #f4f4f4;
+        color: #212121;
+      }
+
+      .folder.drop-target .folder-count {
+        color: #212121;
+        font-weight: 700;
+      }
+
+      /* Lista */
+
+      .selection-bar {
+        margin: 10px 0;
+      }
+
+      .selection-count {
+        font-size: 12px;
+        color: #b4b4b4;
+      }
+
       .list {
         display: grid;
         gap: 8px;
       }
 
       .conversation {
-        position: relative;
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
-        gap: 10px;
-        padding: 12px 42px 12px 12px;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 4px 10px;
+        padding: 10px 8px 10px 12px;
         border: 1px solid #383838;
         border-radius: 12px;
         background: #2f2f2f;
+        user-select: none;
+      }
+
+      .conversation[draggable="true"] {
+        cursor: grab;
       }
 
       .conversation.selected {
@@ -340,14 +430,34 @@
         background: #383838;
       }
 
+      .conversation-in-project,
+      .conversation-missing {
+        opacity: 0.75;
+      }
+
+      .conversation-pending {
+        border-style: dashed;
+        opacity: 0.5;
+        cursor: progress !important;
+      }
+
       .conversation input {
         width: 16px;
         height: 16px;
-        margin: 2px 0 0;
+        margin: 0;
         accent-color: #f4f4f4;
       }
 
+      .checkbox-placeholder {
+        width: 16px;
+      }
+
+      .conversation-content {
+        min-width: 0;
+      }
+
       .conversation-title {
+        display: block;
         overflow: hidden;
         font-size: 13px;
         font-weight: 650;
@@ -355,17 +465,78 @@
         white-space: nowrap;
       }
 
-      .conversation-content {
-        min-width: 0;
+      .conversation-meta {
+        display: block;
+        margin-top: 3px;
+        font-size: 11px;
       }
 
       .conversation-preview {
         display: -webkit-box;
         overflow: hidden;
-        margin-top: 7px;
+        margin-top: 5px;
         color: #b4b4b4;
         font-size: 12px;
         line-height: 1.45;
+        overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+      }
+
+      .icon-button {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #b4b4b4;
+      }
+
+      .icon-button:hover,
+      .icon-button:focus-visible {
+        background: #4a4a4a;
+        color: #ffffff;
+        outline: none;
+      }
+
+      .expand-button svg {
+        transition: transform 120ms ease;
+      }
+
+      .expand-button[aria-expanded="true"] svg {
+        transform: rotate(180deg);
+      }
+
+      .conversation-details {
+        grid-column: 1 / -1;
+        display: grid;
+        gap: 8px;
+        margin: 6px 0 2px 26px;
+        padding-left: 10px;
+        border-left: 2px solid #4a4a4a;
+        font-size: 12px;
+        line-height: 1.45;
+        user-select: text;
+        cursor: auto;
+      }
+
+      .context-label {
+        display: block;
+        margin-bottom: 2px;
+        color: #9b9b9b;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .context-text {
+        display: -webkit-box;
+        overflow: hidden;
+        color: #e0e0e0;
         overflow-wrap: anywhere;
         white-space: pre-wrap;
         -webkit-box-orient: vertical;
@@ -373,48 +544,100 @@
         line-clamp: 4;
       }
 
-      .conversation-open {
-        position: absolute;
-        top: 50%;
-        right: 0;
-        width: 30px;
-        height: 42px;
-        border: 0;
-        border-left: 1px solid #4a4a4a;
-        border-radius: 8px 0 0 8px;
-        background: #383838;
-        color: #d1d1d1;
-        font-size: 16px;
-        transform: translateY(-50%);
+      .context-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: #9b9b9b;
+        font-size: 11px;
       }
 
-      .conversation-open:hover,
-      .conversation-open:focus-visible {
-        background: #4a4a4a;
-        color: #ffffff;
+      .drag-ghost {
+        position: fixed;
+        top: -1000px;
+        left: 0;
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: #f4f4f4;
+        color: #212121;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      /* Barra de seleção e "Mover para…" */
+
+      .action-bar {
+        position: relative;
+        flex: none;
+        display: none;
+        padding: 10px 16px;
+        background: #212121;
+        border-top: 1px solid #383838;
+      }
+
+      .action-bar.visible {
+        display: block;
+      }
+
+      .action-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .action-row .selection-count {
+        flex: 1 1 100%;
+      }
+
+      .action-row .button {
+        min-height: 36px;
+      }
+
+      .move-menu {
+        position: absolute;
+        right: 16px;
+        bottom: calc(100% + 6px);
+        left: 16px;
+        padding: 8px;
+        border: 1px solid #4a4a4a;
+        border-radius: 12px;
+        background: #2a2a2a;
+        box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+      }
+
+      .move-options {
+        display: grid;
+        gap: 2px;
+        max-height: 40vh;
+        margin-top: 6px;
+        overflow-y: auto;
+      }
+
+      .move-option {
+        padding: 8px 10px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #ececec;
+        font-size: 12px;
+        text-align: left;
+      }
+
+      .move-option:hover,
+      .move-option:focus-visible {
+        background: #3a3a3a;
         outline: none;
       }
 
-      .conversation-meta {
-        margin-top: 4px;
-        font-size: 11px;
-      }
-
-      .badge {
-        flex: 0 0 auto;
-        padding: 3px 6px;
-        border-radius: 6px;
-        background: #424242;
-        color: #cdcdcd;
-        font-size: 10px;
-      }
-
-      .load-state {
-        padding: 12px 4px;
-        text-align: center;
-        font-size: 11px;
+      .move-empty {
+        padding: 8px 10px;
         color: #9b9b9b;
+        font-size: 12px;
       }
+
+      /* Estados e avisos */
 
       .empty-state,
       .notice {
@@ -429,7 +652,7 @@
 
       .notice {
         display: none;
-        margin-top: 12px;
+        margin-bottom: 12px;
         border-style: solid;
         text-align: left;
       }
@@ -453,41 +676,19 @@
         background: transparent;
         color: inherit;
         font-size: 12px;
-        cursor: pointer;
       }
 
       .notice-action:hover {
         background: #3a3a3a;
       }
 
-      .move-card,
-      .debug-card {
-        margin-top: 16px;
-        border: 1px solid #383838;
-        border-radius: 12px;
-        background: #2f2f2f;
-      }
-
-      .move-card {
-        padding: 13px;
-      }
-
-      .section-heading {
-        margin-bottom: 9px;
-      }
-
-      .select {
-        padding: 0 10px;
-      }
-
-      .move-summary {
-        margin: 9px 0 11px;
-        font-size: 11px;
-        color: #b4b4b4;
-      }
+      /* Debug */
 
       .debug-card {
         overflow: hidden;
+        border: 1px solid #383838;
+        border-radius: 12px;
+        background: #2f2f2f;
       }
 
       .debug-heading {
@@ -501,6 +702,15 @@
         gap: 7px;
         font-size: 11px;
         font-weight: 700;
+      }
+
+      .badge {
+        flex: 0 0 auto;
+        padding: 3px 6px;
+        border-radius: 6px;
+        background: #424242;
+        color: #cdcdcd;
+        font-size: 10px;
       }
 
       .debug-output {
@@ -565,114 +775,73 @@
               <p class="subtitle">Organize conversas em massa</p>
             </div>
           </div>
-          <span class="status" id="connection-status"><span class="status-dot"></span>Pronto</span>
+          <div class="header-actions">
+            <span class="status" id="connection-status"><span class="status-dot"></span>Pronto</span>
+            <button class="sync-button" id="sync-button" type="button" title="Buscar novamente todas as conversas e Projetos no ChatGPT">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M20 11a8 8 0 0 0-14.9-3M4 13a8 8 0 0 0 14.9 3M5 3v5h5M19 21v-5h-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Sincronizar
+            </button>
+          </div>
         </div>
         <nav class="tabs" role="tablist" aria-label="Modos do painel">
-          <button class="tab active" id="tab-organize" type="button" role="tab" aria-selected="true">Buscar e mover</button>
-          <button class="tab" id="tab-all" type="button" role="tab" aria-selected="false">Listar e excluir</button>
+          <button class="tab active" id="tab-organize" type="button" role="tab" aria-selected="true" aria-controls="view-organize">Organizar</button>
+          <button class="tab" id="tab-debug" type="button" role="tab" aria-selected="false" aria-controls="view-debug">Debug</button>
         </nav>
       </header>
 
-      <main>
-        <div id="view-organize">
-        <section aria-labelledby="search-title">
-          <h2 id="search-title">Pesquisar conversas</h2>
-          <form class="search" id="search-form" style="margin-top: 9px">
+      <section class="toolbar" id="organize-toolbar" aria-label="Busca e pastas">
+        <div class="notice" id="notice" role="status"></div>
+
+        <div id="workspace" hidden>
+          <form class="search" id="search-form">
             <input
               class="field"
               id="search-query"
               type="search"
-              aria-label="Consulta"
-              placeholder="Digite uma palavra ou assunto"
-              required
+              aria-label="Buscar conversas"
+              placeholder="Filtrar por título"
             />
-            <button class="button button-primary" id="search-button" type="submit">Buscar</button>
+            <div class="search-row">
+              <div class="segmented" role="group" aria-label="Modo de busca">
+                <button class="segment active" id="mode-title" type="button" aria-pressed="true">Título</button>
+                <button class="segment" id="mode-content" type="button" aria-pressed="false">Conteúdo</button>
+              </div>
+              <button class="button button-primary" id="search-submit" type="submit" hidden>Buscar</button>
+            </div>
           </form>
-          <p class="search-note">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 8v4l2.5 1.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-            Conversas que já estão em Projetos são ocultadas.
-          </p>
-        </section>
+          <p class="search-note" id="search-note" hidden></p>
 
-        <section aria-labelledby="results-title">
+          <section class="folders" aria-label="Pastas">
+            <button class="folders-toggle" id="folders-toggle" type="button" aria-expanded="true">
+              <span class="folders-toggle-label">Pastas</span>
+              <span class="folders-active" id="folders-active"></span>
+            </button>
+            <div class="folder-list" id="folder-list"></div>
+          </section>
+
           <div class="selection-bar">
             <div>
-              <h2 id="results-title">Resultados</h2>
-              <p class="selection-count" id="selection-count">Nenhuma pesquisa executada</p>
+              <p class="selection-count" id="list-summary"></p>
+              <p class="selection-count" id="freshness"></p>
             </div>
-            <button class="text-button" id="select-all-button" type="button" disabled>Selecionar todas</button>
+            <button class="text-button" id="select-visible" type="button">Selecionar visíveis</button>
           </div>
+        </div>
+      </section>
 
-          <div class="list" id="conversation-list">
-            <div class="empty-state">Pesquise um assunto para carregar conversas que ainda não pertencem a Projetos.</div>
-          </div>
-
-          <p class="load-state" id="result-summary"></p>
-        </section>
-
-        <section class="move-card" aria-labelledby="move-title">
-          <div class="section-heading">
-            <h2 id="move-title">Mover para o Projeto</h2>
-            <button class="text-button" id="projects-refresh-button" type="button" hidden>Atualizar</button>
-          </div>
-          <button class="button button-secondary" id="projects-load-button" type="button" style="width: 100%">
-            Carregar projetos
-          </button>
-          <select class="select" id="project-select" aria-label="Projeto de destino" disabled hidden>
-            <option value="">Escolha um Projeto</option>
-          </select>
-          <p class="move-summary" id="move-summary">Selecione conversas e um Projeto de destino.</p>
-          <button class="button button-accent" id="move-button" type="button" disabled>Mover conversas</button>
-        </section>
+      <main class="scroll-area" id="view-organize" role="tabpanel" aria-labelledby="tab-organize">
+        <div id="load-panel">
+          <div class="empty-state">Carregando…</div>
         </div>
 
-        <div id="view-all" hidden>
-          <section aria-labelledby="all-title">
-            <h2 id="all-title">Todas as conversas</h2>
+        <div class="list" id="conversation-list" aria-label="Conversas"></div>
 
-            <div id="all-controls" hidden>
-              <input
-                class="field"
-                id="all-filter-text"
-                type="search"
-                aria-label="Filtrar por título"
-                placeholder="Filtrar por título"
-                style="margin-top: 9px"
-              />
-              <div class="chips" role="group" aria-label="Filtro de escopo">
-                <button class="chip active" id="chip-outside" type="button">Fora de projeto</button>
-                <button class="chip" id="chip-in" type="button">Em projeto</button>
-                <button class="chip" id="chip-all" type="button">Todas</button>
-              </div>
+        <footer>ChatGPT Manager · operações executadas com sua sessão atual</footer>
+      </main>
 
-              <div class="selection-bar">
-                <div>
-                  <p class="selection-count" id="all-summary">Nenhuma conversa carregada</p>
-                  <p class="selection-count">
-                    <span id="all-freshness"></span>
-                    <button class="text-button" id="all-refresh-button" type="button">Atualizar</button>
-                  </p>
-                </div>
-                <button class="text-button" id="all-select-visible" type="button" disabled>Selecionar visíveis</button>
-              </div>
-            </div>
-
-            <div class="list" id="all-list" style="margin-top: 12px">
-              <div class="empty-state">Carregando…</div>
-            </div>
-
-            <div class="all-actions" id="all-actions">
-              <span class="selection-count" id="all-selection-summary"></span>
-              <button class="button button-secondary" id="all-clear-button" type="button">Limpar</button>
-              <button class="button button-primary" id="all-delete-button" type="button">Excluir</button>
-            </div>
-          </section>
-        </div>
-
-        <div class="notice" id="notice" role="status"></div>
-
+      <main class="scroll-area" id="view-debug" role="tabpanel" aria-labelledby="tab-debug" hidden>
         <section class="debug-card" aria-labelledby="debug-title">
           <div class="debug-heading">
             <div class="debug-title" id="debug-title">
@@ -687,7 +856,24 @@
         </section>
       </main>
 
-      <footer>ChatGPT Manager · operações executadas com sua sessão atual</footer>
+      <div class="action-bar" id="action-bar">
+        <div class="move-menu" id="move-menu" hidden>
+          <input
+            class="field"
+            id="move-filter"
+            type="search"
+            aria-label="Filtrar Projetos de destino"
+            placeholder="Filtrar Projetos"
+          />
+          <div class="move-options" id="move-options" role="listbox" aria-label="Projetos de destino"></div>
+        </div>
+        <div class="action-row">
+          <span class="selection-count" id="selection-summary"></span>
+          <button class="button button-primary" id="move-open" type="button" aria-haspopup="listbox">Mover para…</button>
+          <button class="button button-secondary" id="delete-button" type="button">Excluir</button>
+          <button class="button button-secondary" id="clear-button" type="button">Limpar</button>
+        </div>
+      </div>
     </div>
     <script type="module" src="dist/sidepanel.js"></script>
   </body>

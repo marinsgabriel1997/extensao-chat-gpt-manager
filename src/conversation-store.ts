@@ -6,8 +6,8 @@ export interface ConversationSnapshot {
   projects: Project[];
 }
 
-interface ConversationCacheV1 extends ConversationSnapshot {
-  version: 1;
+interface ConversationCacheV2 extends ConversationSnapshot {
+  version: 2;
 }
 
 // Interface mínima compatível com chrome.storage.local, substituível nos testes.
@@ -18,7 +18,10 @@ export interface KeyValueStorage {
 }
 
 const STORAGE_KEY = "conversation-cache";
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
+// A versão 1 difere apenas pela ausência de `createdAt`; continua legível para
+// não forçar uma nova coleta completa após a atualização da extensão.
+const LEGACY_CACHE_VERSION = 1;
 
 export class ConversationStore {
   constructor(private readonly storage: KeyValueStorage) {}
@@ -33,7 +36,7 @@ export class ConversationStore {
   }
 
   async write(snapshot: ConversationSnapshot): Promise<void> {
-    const cache: ConversationCacheV1 = {
+    const cache: ConversationCacheV2 = {
       version: CACHE_VERSION,
       fetchedAt: snapshot.fetchedAt,
       conversations: snapshot.conversations.map((conversation) => ({ ...conversation })),
@@ -87,7 +90,10 @@ export class ConversationStore {
 }
 
 function parseCache(value: unknown): ConversationSnapshot | null {
-  if (!isObject(value) || value.version !== CACHE_VERSION) {
+  if (
+    !isObject(value) ||
+    (value.version !== CACHE_VERSION && value.version !== LEGACY_CACHE_VERSION)
+  ) {
     return null;
   }
 
@@ -141,11 +147,17 @@ function parseConversation(value: unknown): Conversation | null {
     return null;
   }
 
+  const createdAt = value.createdAt ?? null;
+  if (createdAt !== null && typeof createdAt !== "string") {
+    return null;
+  }
+
   return {
     id: value.id,
     title: value.title,
     preview: value.preview,
     projectId: value.projectId,
+    createdAt,
     updatedAt: value.updatedAt,
   };
 }

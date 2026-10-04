@@ -1,6 +1,8 @@
 import type {
   Conversation,
+  ConversationContext,
   ConversationId,
+  ConversationSearchHit,
   DeleteBatchResult,
   DeleteItemResult,
   MoveBatchResult,
@@ -9,7 +11,6 @@ import type {
   Project,
   ProjectId,
 } from "./domain.js";
-import { uniqueConversations } from "./domain.js";
 import { logger } from "./logger.js";
 
 const CHATGPT_ORIGIN = "https://chatgpt.com";
@@ -86,6 +87,26 @@ function arrayValue(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+// Datas chegam em formatos diferentes conforme o endpoint (docs/chatgpt-integration.md):
+// texto ISO 8601 na listagem geral, epoch numérico em segundos no detalhe e na
+// pesquisa. O domínio recebe sempre ISO 8601.
+function timestampValue(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return new Date(value * 1000).toISOString();
+  }
+
+  const text = stringValue(value);
+  if (text === null) {
+    return null;
+  }
+
+  if (/^\d+(\.\d+)?$/.test(text)) {
+    return new Date(Number(text) * 1000).toISOString();
+  }
+
+  return Number.isFinite(Date.parse(text)) ? text : null;
+}
+
 function projectIdFromPayload(payload: JsonObject): ProjectId | null {
   const gizmoId = stringValue(payload.gizmo_id);
   if (gizmoId?.startsWith("g-p-")) {
@@ -109,13 +130,14 @@ export function conversationFromPayload(payload: unknown): Conversation | null {
   return {
     id,
     title: stringValue(payload.title) ?? "Conversa sem título",
-    preview: firstVisibleUserText(payload),
+    preview: firstVisibleText(activePath(payload), "user"),
     projectId: projectIdFromPayload(payload),
-    updatedAt: stringValue(payload.update_time),
+    createdAt: timestampValue(payload.create_time),
+    updatedAt: timestampValue(payload.update_time),
   };
 }
 
-export function conversationFromSearchPayload(payload: unknown): Conversation | null {
+export function searchHitFromPayload(payload: unknown): ConversationSearchHit | null {
   if (!isObject(payload)) {
     return null;
   }
@@ -129,15 +151,32 @@ export function conversationFromSearchPayload(payload: unknown): Conversation | 
   return {
     id,
     title: stringValue(payload.title) ?? "Conversa sem título",
-    preview: stringValue(searchPayload.snippet) ?? "",
-    projectId: null,
-    updatedAt: stringValue(payload.update_time),
+    snippet: stringValue(searchPayload.snippet) ?? "",
+    updatedAt: timestampValue(payload.update_time),
   };
 }
 
-function firstVisibleUserText(payload: JsonObject): string {
+export function conversationContextFromPayload(
+  conversationId: ConversationId,
+  payload: unknown,
+): ConversationContext {
+  if (!isObject(payload)) {
+    throw new IntegrationError("O detalhe da conversa retornou um formato inválido.");
+  }
+
+  const path = activePath(payload);
+  return {
+    conversationId,
+    firstUserMessage: firstVisibleText(path, "user"),
+    lastAssistantMessage: firstVisibleText([...path].reverse(), "assistant"),
+  };
+}
+
+// Caminho ativo da conversa, da raiz até `current_node`: `mapping` é uma árvore
+// ligada por `parent`, e ramos abandonados (edições, regenerações) ficam fora.
+function activePath(payload: JsonObject): JsonObject[] {
   if (!isObject(payload.mapping)) {
-    return "";
+    return [];
   }
 
   const nodes = payload.mapping;
@@ -155,9 +194,15 @@ function firstVisibleUserText(payload: JsonObject): string {
     nodeId = stringValue(node.parent);
   }
 
-  path.reverse();
-  for (const node of path) {
-    const text = visibleUserTextFromNode(node);
+  return path.reverse();
+}
+
+function firstVisibleText(
+  nodes: readonly JsonObject[],
+  role: "user" | "assistant",
+): string {
+  for (const node of nodes) {
+    const text = visibleTextFromNode(node, role);
     if (text !== null) {
       return text;
     }
@@ -166,7 +211,9 @@ function firstVisibleUserText(payload: JsonObject): string {
   return "";
 }
 
-function visibleUserTextFromNode(node: JsonObject): string | null {
+// Só `content_type = "text"` é texto visível: raciocínio (`thoughts`,
+// `reasoning_recap`) e contexto editável do modelo têm tipos próprios.
+function visibleTextFromNode(node: JsonObject, role: "user" | "assistant"): string | null {
   if (!isObject(node.message)) {
     return null;
   }
@@ -177,10 +224,15 @@ function visibleUserTextFromNode(node: JsonObject): string | null {
   const metadata = isObject(message.metadata) ? message.metadata : {};
 
   if (
-    author.role !== "user" ||
+    author.role !== role ||
     content.content_type !== "text" ||
     metadata.is_visually_hidden_from_conversation === true
   ) {
+    return null;
+  }
+
+  // Respostas do assistente endereçadas a ferramentas não são texto para o usuário.
+  if (role === "assistant" && message.recipient !== undefined && message.recipient !== "all") {
     return null;
   }
 
@@ -234,8 +286,6 @@ export class ChatGptClient {
   private requestQueue: Promise<void> = Promise.resolve();
   private nextRequestAt = 0;
   private rateLimitedUntil = 0;
-  private readonly projectConversationIds = new Set<ConversationId>();
-  private projectsPromise: Promise<Project[]> | null = null;
   private listingPromise: Promise<Conversation[]> | null = null;
 
   private readonly now: () => number;
@@ -252,18 +302,16 @@ export class ChatGptClient {
     this.random = dependencies.random ?? defaultDependencies.random;
   }
 
-  async searchEligibleConversations(query: string): Promise<{
-    conversations: Conversation[];
-    filteredCount: number;
-  }> {
+  // Pesquisa por conteúdo. Não resolve o vínculo com Projeto: a pesquisa não o
+  // informa, e o painel cruza os resultados com a listagem completa.
+  async searchConversations(query: string): Promise<ConversationSearchHit[]> {
     const normalizedQuery = query.trim();
     if (normalizedQuery.length === 0) {
       throw new Error("Digite um texto para pesquisar.");
     }
 
     logger.info("search", "started", { query: normalizedQuery });
-    await this.listProjects();
-    const found: Conversation[] = [];
+    const hits = new Map<ConversationId, ConversationSearchHit>();
     let cursor: string | null = null;
     let page = 0;
     const visitedCursors = new Set<string>();
@@ -281,9 +329,13 @@ export class ChatGptClient {
       }
 
       const pageItems = arrayValue(payload.items)
-        .map(conversationFromSearchPayload)
-        .filter((item): item is Conversation => item !== null);
-      found.push(...pageItems);
+        .map(searchHitFromPayload)
+        .filter((item): item is ConversationSearchHit => item !== null);
+      for (const item of pageItems) {
+        if (!hits.has(item.id)) {
+          hits.set(item.id, item);
+        }
+      }
       page += 1;
       logger.debug("search", "page_loaded", { page, items: pageItems.length });
 
@@ -299,52 +351,15 @@ export class ChatGptClient {
       }
     } while (cursor !== null);
 
-    const unique = uniqueConversations(found);
-    const eligible = unique.filter(
-      (conversation) => !this.projectConversationIds.has(conversation.id),
-    );
-    const filteredCount = unique.length - eligible.length;
-
-    logger.info("search", "completed", {
-      pages: page,
-      found: unique.length,
-      eligible: eligible.length,
-      filtered: filteredCount,
-    });
-
-    return { conversations: eligible, filteredCount };
+    logger.info("search", "completed", { pages: page, found: hits.size });
+    return [...hits.values()];
   }
 
+  // Somente os nomes dos Projetos. As conversas de cada Projeto vêm da listagem
+  // completa, que informa o vínculo por item.
   async listProjects(): Promise<Project[]> {
-    if (this.projectsPromise === null) {
-      this.projectsPromise = this.loadProjectsAndConversationIndex(true).catch(
-        (error: unknown) => {
-          this.projectsPromise = null;
-          this.projectConversationIds.clear();
-          throw error;
-        },
-      );
-    }
-
-    return this.projectsPromise;
-  }
-
-  // Caminho leve para quem só precisa dos nomes dos Projetos: não pagina as
-  // conversas de cada Projeto (a parte cara do índice usado pela pesquisa).
-  async listProjectNames(): Promise<Project[]> {
-    if (this.projectsPromise !== null) {
-      return this.projectsPromise;
-    }
-
-    return this.loadProjectsAndConversationIndex(false);
-  }
-
-  private async loadProjectsAndConversationIndex(
-    indexProjectConversations: boolean,
-  ): Promise<Project[]> {
     logger.info("projects", "list_started");
     const projects: Project[] = [];
-    const projectContinuations: Array<{ projectId: ProjectId; cursor: string }> = [];
     let cursor: string | null = null;
     let page = 0;
     const visitedCursors = new Set<string>();
@@ -367,9 +382,6 @@ export class ChatGptClient {
         .map(projectFromSidebarItem)
         .filter((item): item is Project => item !== null);
       projects.push(...pageItems);
-      for (const rawItem of arrayValue(payload.items)) {
-        this.collectSidebarConversationIds(rawItem, projectContinuations);
-      }
       page += 1;
       logger.debug("projects", "page_loaded", { page, items: pageItems.length });
 
@@ -386,94 +398,9 @@ export class ChatGptClient {
     } while (cursor !== null);
 
     const unique = [...new Map(projects.map((project) => [project.id, project])).values()];
-    if (indexProjectConversations) {
-      for (const continuation of projectContinuations) {
-        await this.loadRemainingProjectConversationIds(
-          continuation.projectId,
-          continuation.cursor,
-        );
-      }
-    }
     unique.sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
-    logger.info("projects", "list_completed", {
-      pages: page,
-      projects: unique.length,
-      indexedConversations: this.projectConversationIds.size,
-    });
+    logger.info("projects", "list_completed", { pages: page, projects: unique.length });
     return unique;
-  }
-
-  private collectSidebarConversationIds(
-    rawItem: unknown,
-    continuations: Array<{ projectId: ProjectId; cursor: string }>,
-  ): void {
-    if (!isObject(rawItem) || !isObject(rawItem.gizmo) || !isObject(rawItem.gizmo.gizmo)) {
-      return;
-    }
-
-    const projectId = stringValue(rawItem.gizmo.gizmo.id);
-    if (projectId === null || !isObject(rawItem.conversations)) {
-      return;
-    }
-
-    for (const rawConversation of arrayValue(rawItem.conversations.items)) {
-      if (isObject(rawConversation)) {
-        const conversationId = stringValue(rawConversation.id);
-        if (conversationId !== null) {
-          this.projectConversationIds.add(conversationId);
-        }
-      }
-    }
-
-    const cursor = stringValue(rawItem.conversations.cursor);
-    if (cursor !== null) {
-      continuations.push({ projectId, cursor });
-    }
-  }
-
-  private async loadRemainingProjectConversationIds(
-    projectId: ProjectId,
-    initialCursor: string,
-  ): Promise<void> {
-    let cursor: string | null = initialCursor;
-    let page = 1;
-    const visitedCursors = new Set<string>();
-
-    while (cursor !== null && !visitedCursors.has(cursor)) {
-      visitedCursors.add(cursor);
-      const url = new URL(
-        `/backend-api/gizmos/${encodeURIComponent(projectId)}/conversations`,
-        CHATGPT_ORIGIN,
-      );
-      url.searchParams.set("cursor", cursor);
-      url.searchParams.set("limit", "5");
-      url.searchParams.set("owned_only", "true");
-
-      const payload = await this.fetchJson(url, { method: "GET" });
-      if (!isObject(payload)) {
-        throw new IntegrationError(
-          "A paginação de conversas do Projeto retornou um formato inválido.",
-        );
-      }
-
-      const items = arrayValue(payload.items);
-      for (const rawConversation of items) {
-        if (isObject(rawConversation)) {
-          const conversationId = stringValue(rawConversation.id);
-          if (conversationId !== null) {
-            this.projectConversationIds.add(conversationId);
-          }
-        }
-      }
-
-      page += 1;
-      logger.debug("projects", "conversation_page_loaded", {
-        projectId,
-        page,
-        items: items.length,
-      });
-      cursor = stringValue(payload.cursor);
-    }
   }
 
   async getConversation(conversationId: ConversationId): Promise<Conversation> {
@@ -492,6 +419,21 @@ export class ChatGptClient {
       ? conversation
       : { ...conversation, id: conversationId };
     return { ...normalizedConversation };
+  }
+
+  async getConversationContext(conversationId: ConversationId): Promise<ConversationContext> {
+    const url = new URL(
+      `/backend-api/conversation/${encodeURIComponent(conversationId)}`,
+      CHATGPT_ORIGIN,
+    );
+    const payload = await this.fetchJson(url, { method: "GET" });
+    const context = conversationContextFromPayload(conversationId, payload);
+    logger.debug("context", "loaded", {
+      conversationId,
+      hasUserMessage: context.firstUserMessage.length > 0,
+      hasAssistantMessage: context.lastAssistantMessage.length > 0,
+    });
+    return context;
   }
 
   // Coletas simultâneas compartilham a mesma passada: duas paginações do mesmo
@@ -664,7 +606,6 @@ export class ChatGptClient {
             snapshot.get(conversationId) ?? (await this.getConversation(conversationId));
           title = current.title;
           if (current.projectId !== null) {
-            this.projectConversationIds.add(conversationId);
             logger.info("delete", "item_skipped", {
               conversationId,
               projectId: current.projectId,
@@ -742,7 +683,6 @@ export class ChatGptClient {
             snapshot.get(conversationId) ?? (await this.getConversation(conversationId));
           title = current.title;
           if (current.projectId !== null) {
-            this.projectConversationIds.add(conversationId);
             logger.info("move", "item_skipped", {
               conversationId,
               currentProjectId: current.projectId,
@@ -771,7 +711,6 @@ export class ChatGptClient {
           }
 
           logger.info("move", "item_succeeded", { conversationId, destinationProjectId });
-          this.projectConversationIds.add(conversationId);
           return { conversationId, status: "success" };
         } catch (error) {
           const reason = failureReason(error);

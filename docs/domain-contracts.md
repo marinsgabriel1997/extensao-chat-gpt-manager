@@ -19,21 +19,62 @@ interface Conversation {
   title: string;
   preview: string;
   projectId: ProjectId | null;
+  createdAt: string | null;
   updatedAt: string | null;
 }
 ```
 
-Representa uma conversa disponível para apresentação e seleção. `preview` contém o trecho retornado pela pesquisa do ChatGPT ou uma string vazia quando não houver trecho. `updatedAt` contém a última atualização em ISO 8601 ou `null` quando a integração não fornecer o dado. Campos adicionais da integração não integram automaticamente o domínio.
+Representa uma conversa disponível para apresentação e seleção. `preview` contém a primeira mensagem textual visível do usuário quando a integração fornece o detalhe, ou uma string vazia. `createdAt` e `updatedAt` contêm datas em ISO 8601, ou `null` quando a integração não fornecer o dado; a conversão de formatos crus acontece na fronteira da integração. Campos adicionais da integração não integram automaticamente o domínio.
 
-Uma conversa é elegível para os resultados de pesquisa quando `projectId` é `null`. Conversas com `projectId` não nulo são removidas antes da formação da seleção de movimentação. Conversas de GPTs customizados não possuem vínculo com Projeto e mantêm `projectId` nulo.
+Uma conversa é selecionável, arrastável e excluível somente quando `projectId` é `null`. Conversas de GPTs customizados não possuem vínculo com Projeto e mantêm `projectId` nulo.
 
-## ConversationScopeFilter
+## ConversationFolder
 
 ```ts
-type ConversationScopeFilter = "outside_project" | "in_project" | "all";
+type ConversationFolder =
+  | { kind: "outside_project" }
+  | { kind: "all" }
+  | { kind: "project"; projectId: ProjectId };
+
+interface FolderCounts {
+  outsideProject: number;
+  all: number;
+  byProject: Map<ProjectId, number>;
+}
 ```
 
-Filtro de escopo da listagem completa. `filterByScope` é uma função pura que aplica o filtro sem alterar a coleção original. O filtro é um conceito de domínio independente da UI; mudanças de filtro nunca alteram a seleção.
+Pasta da tela de organização. "Pasta" é o vocabulário da interface; cada Projeto do ChatGPT é uma pasta, e `outside_project` e `all` são pastas virtuais. Funções puras:
+
+- `filterByFolder(conversations, folder)` aplica a pasta sem alterar a coleção original;
+- `countByFolder(conversations, projects)` conta conversas por pasta, incluindo Projetos sem conversas (zero) e Projetos referenciados por conversas mas ausentes da lista de Projetos;
+- `filterByTitle(conversations, query)` filtra por título sem distinção entre maiúsculas e minúsculas; consulta vazia não filtra.
+
+Trocar de pasta ou de filtro nunca altera a seleção.
+
+## ConversationSearchHit
+
+```ts
+interface ConversationSearchHit {
+  id: ConversationId;
+  title: string;
+  snippet: string;
+  updatedAt: string | null;
+}
+```
+
+Resultado da pesquisa por conteúdo. A pesquisa não informa o vínculo com Projeto: ele é resolvido pelo identificador contra a listagem completa. Resultados ausentes da listagem não são selecionáveis até uma nova coleta.
+
+## ConversationContext
+
+```ts
+interface ConversationContext {
+  conversationId: ConversationId;
+  firstUserMessage: string;
+  lastAssistantMessage: string;
+}
+```
+
+Contexto exibido ao expandir uma conversa: primeira mensagem textual visível do usuário e última resposta textual visível do assistente no caminho ativo, ou strings vazias. O contexto existe somente em memória durante a vida do painel e nunca é persistido.
 
 ## Project
 
@@ -69,21 +110,21 @@ interface Page<T> {
 
 ## ConversationSelection
 
-```ts
-interface ConversationSelection {
-  query: ConversationQuery;
-  conversationIds: Set<ConversationId>;
-}
-```
+A seleção é um conjunto explícito de `ConversationId` mantido pela tela de organização.
 
 Regras:
 
-- a seleção pertence a uma única consulta;
 - cada identificador aparece no máximo uma vez;
+- somente conversas fora de projeto podem ser selecionadas;
 - seleção vazia representa nenhuma conversa;
-- selecionar todos percorre todas as páginas e adiciona cada identificador encontrado;
-- inclusão e remoção manuais alteram explicitamente `conversationIds`;
-- renderizações da interface não recriam nem descartam a seleção silenciosamente.
+- "selecionar visíveis" adiciona os identificadores selecionáveis da visão atual (pasta e filtro);
+- inclusão e remoção manuais alteram explicitamente a seleção;
+- trocar de pasta, filtrar ou atualizar a interface não recria nem descarta a seleção silenciosamente; a reconciliação após nova coleta mantém a interseção com as conversas que continuam selecionáveis e informa os itens removidos.
+
+Funções puras de apoio:
+
+- `selectRange(orderedIds, anchorId, targetId, selectableIds)`: intervalo da seleção por Shift+clique, entre âncora e alvo inclusive, na ordem visível, restrito aos selecionáveis; sem âncora visível, apenas o alvo;
+- `dragSet(draggedId, selectedIds)`: conjunto levado por um arraste — a seleção inteira quando o item arrastado está selecionado, senão somente o item.
 
 ## MoveBatchCommand
 
@@ -194,12 +235,14 @@ Regras:
 
 ```ts
 interface ConversationRepository {
-  search(query: ConversationQuery, cursor: string | null): Promise<Page<Conversation>>;
+  listAll(): Promise<Conversation[]>;
+  search(query: string): Promise<ConversationSearchHit[]>;
   get(conversationId: ConversationId): Promise<Conversation>;
+  getContext(conversationId: ConversationId): Promise<ConversationContext>;
 }
 
 interface ProjectRepository {
-  list(cursor: string | null): Promise<Page<Project>>;
+  list(): Promise<Project[]>;
 }
 
 interface ConversationMover {
@@ -209,7 +252,7 @@ interface ConversationMover {
 
 Essas interfaces expressam as necessidades do domínio sem expor autenticação, URLs, cabeçalhos ou payloads da integração.
 
-Antes de mover um item, a aplicação obtém seu estado atual por meio do repositório. Quando `projectId` não é nulo, nenhuma chamada de movimentação é realizada para esse item.
+Antes de mover um item, a aplicação obtém seu estado atual no ChatGPT. Quando `projectId` não é nulo, nenhuma chamada de movimentação é realizada para esse item.
 
 ## Evento de debug
 

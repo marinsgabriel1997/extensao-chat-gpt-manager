@@ -10,17 +10,17 @@ O ChatGPT Manager reduz o trabalho manual necessário para localizar várias con
 
 O MVP permite:
 
-- pesquisar conversas por texto;
-- ocultar dos resultados conversas que já pertencem a Projetos;
-- selecionar conversas individualmente;
-- selecionar todas as conversas de uma pesquisa, incluindo todas as páginas do resultado;
-- ajustar manualmente uma seleção em massa;
-- listar Projetos existentes do ChatGPT;
-- mover as conversas selecionadas para um Projeto;
-- apresentar o resultado individual das operações em lote.
+- listar todas as conversas não arquivadas, com cache local persistente;
+- navegar por pastas: Sem projeto, Todas e cada Projeto, com contagem;
+- filtrar por título (local) ou pesquisar no conteúdo das conversas;
+- selecionar conversas individualmente, por intervalo (Shift+clique) ou todas as visíveis, e ajustar a seleção manualmente;
+- mover conversas para um Projeto arrastando-as até a pasta ou pelo menu "Mover para…";
+- expandir uma conversa para ver a primeira mensagem, a última resposta e as datas;
+- excluir conversas fora de projeto a partir de seleção explícita, com confirmação;
+- apresentar o resultado individual das operações em lote;
 - disponibilizar um modo debug com logs estruturados do fluxo da extensão.
 
-Exclusão e arquivamento em massa não fazem parte do MVP.
+Arquivamento em massa não faz parte do MVP.
 
 ## Conceito de LIXEIRA
 
@@ -44,7 +44,7 @@ O usuário pode criar no ChatGPT um Projeto chamado `LIXEIRA` e escolhê-lo como
 
 ## Interface
 
-A interface principal usa o Side Panel do Chrome. O arquivo `sidepanel.html` contém o protótipo visual estático inicial.
+A interface principal usa o Side Panel do Chrome (`sidepanel.html` e `src/sidepanel.ts`), com uma única tela de organização.
 
 ## Estado do projeto
 
