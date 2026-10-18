@@ -1,63 +1,150 @@
+<div align="center">
+
+<img src="icon/icon-128.png" alt="ChatGPT Manager" width="96" height="96">
+
 # ChatGPT Manager
 
-Extensão Chrome para pesquisar, selecionar e organizar conversas do ChatGPT em massa.
+**Organize centenas de conversas do ChatGPT em minutos, direto no Side Panel do Chrome.**
 
-## Objetivo
+Filtre, selecione em massa e mova conversas para Projetos sem abrir uma por uma.
 
-O ChatGPT Manager reduz o trabalho manual necessário para localizar várias conversas e movê-las para um Projeto do ChatGPT. A extensão usa a sessão já autenticada no ChatGPT e não solicita credenciais externas.
+[![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Chrome](https://img.shields.io/badge/Chrome-114%2B-34A853)](#instalação)
+[![Sem dependências de runtime](https://img.shields.io/badge/runtime%20deps-0-brightgreen)](package.json)
+[![Status](https://img.shields.io/badge/status-est%C3%A1vel-brightgreen)](#estado-do-projeto)
 
-## MVP
+[Funcionalidades](#funcionalidades) ·
+[Instalação](#instalação) ·
+[Como usar](#como-usar) ·
+[Privacidade](#privacidade-e-segurança) ·
+[Arquitetura](#arquitetura) ·
+[Desenvolvimento](#desenvolvimento)
 
-O MVP permite:
+</div>
 
-- listar todas as conversas não arquivadas, com cache local persistente;
-- navegar por pastas: Sem projeto, Todas e cada Projeto, com contagem;
-- filtrar por título (local) ou pesquisar no conteúdo das conversas;
-- selecionar conversas individualmente, por intervalo (Shift+clique) ou todas as visíveis, e ajustar a seleção manualmente;
-- mover conversas para um Projeto arrastando-as até a pasta ou pelo menu "Mover para…";
-- expandir uma conversa para ver a primeira mensagem, a última resposta e as datas;
-- excluir conversas fora de projeto a partir de seleção explícita, com confirmação;
-- apresentar o resultado individual das operações em lote;
-- disponibilizar um modo debug com logs estruturados do fluxo da extensão.
+---
 
-Arquivamento em massa não faz parte do MVP.
+## Por quê?
 
-## Conceito de LIXEIRA
+A interface do ChatGPT foi feita para conversar, não para organizar. Mover dezenas de conversas para um Projeto significa abrir cada uma, clicar no menu e escolher o destino, repetidamente.
 
-O usuário pode criar no ChatGPT um Projeto chamado `LIXEIRA` e escolhê-lo como destino de conversas que deseja revisar posteriormente. Esse nome é uma convenção de uso: a extensão não cria o Projeto automaticamente e não atribui a ele comportamento especial.
+O **ChatGPT Manager** carrega todas as suas conversas não arquivadas em uma única lista, mostra em qual Projeto cada uma está e permite reorganizá-las em lote, com arrastar e soltar ou pelo teclado.
 
-## Tecnologia
+## Funcionalidades
 
-- Chrome Extension Manifest V3;
-- TypeScript;
-- HTML e CSS;
-- Web APIs nativas;
-- Chrome Extensions APIs;
-- sem framework de UI.
+| | |
+| --- | --- |
+| 🗂️ **Pastas com contagem** | Navegue por *Sem projeto*, *Todas* e cada Projeto do ChatGPT. |
+| 🔎 **Busca por título ou conteúdo** | Filtro local instantâneo por título ou pesquisa no conteúdo das conversas. |
+| ☑️ **Seleção granular e em massa** | Clique, intervalo com <kbd>Shift</kbd>+clique ou todas as visíveis, com ajuste manual depois. |
+| 🖱️ **Arrastar e soltar** | Solte a seleção sobre uma pasta para movê-la, ou use o menu **Mover para…**. |
+| 👁️ **Contexto sob demanda** | Expanda uma conversa para ver a primeira mensagem, a última resposta e as datas. |
+| 🗑️ **Exclusão segura** | Exclua conversas fora de projeto a partir de seleção explícita e sempre com confirmação. |
+| 📊 **Resultado por item** | Operações em lote informam sucessos, itens ignorados e falhas individualmente. |
+| 💾 **Cache local persistente** | Abrir o painel não faz nenhuma chamada ao ChatGPT; você sincroniza quando quiser. |
+| 🐞 **Modo debug** | Logs estruturados do fluxo da extensão para diagnóstico. |
 
-## Documentação
+> [!TIP]
+> **Convenção LIXEIRA:** crie no ChatGPT um Projeto chamado `LIXEIRA` e use-o como destino das conversas que você quer revisar antes de excluir. A extensão não cria nem trata esse Projeto de forma especial. É apenas uma convenção de uso.
+
+## Instalação
+
+A extensão não está publicada na Chrome Web Store. Para instalar a partir do código-fonte:
+
+**Pré-requisitos:** [Node.js](https://nodejs.org/) 18+ e Google Chrome 114+.
+
+```sh
+git clone https://github.com/marinsgabriel1997/extensao-chat-gpt-manager.git
+cd extensao-chat-gpt-manager
+npm install
+npm run build
+```
+
+Depois, no Chrome:
+
+1. Acesse `chrome://extensions`.
+2. Ative o **Modo do desenvolvedor** no canto superior direito.
+3. Clique em **Carregar sem compactação** e selecione a pasta do projeto.
+
+## Como usar
+
+1. Faça login normalmente em [chatgpt.com](https://chatgpt.com).
+2. Clique no ícone do **ChatGPT Manager** para abrir o Side Panel.
+3. Clique em **Carregar conversas** na primeira vez. Depois disso, use **Sincronizar** para atualizar.
+4. Escolha uma pasta, filtre e selecione as conversas.
+5. Arraste a seleção até um Projeto ou use **Mover para…**.
+
+**Atalhos**
+
+| Tecla | Ação |
+| --- | --- |
+| <kbd>Shift</kbd> + clique | Seleciona um intervalo |
+| <kbd>Enter</kbd> | Executa a pesquisa por conteúdo |
+| <kbd>Esc</kbd> | Fecha o menu *Mover para…* ou limpa a seleção |
+
+## Privacidade e segurança
+
+- **Sem credenciais externas.** A extensão usa apenas a sessão já autenticada no seu navegador.
+- **Sem servidores de terceiros.** Nenhum dado sai do seu navegador além das chamadas ao próprio `chatgpt.com`.
+- **Permissões mínimas:** `sidePanel`, `storage` e acesso a `https://chatgpt.com/*`.
+- **Ações destrutivas são explícitas.** Uma seleção vazia nunca é tratada como "todas as conversas", e exclusões exigem confirmação.
+- **Sem arquivamento em massa** no MVP.
+
+> [!WARNING]
+> A integração usa chamadas internas observadas na aplicação web do ChatGPT, que **não são uma API pública nem estável**. Mudanças da OpenAI podem quebrar a extensão sem aviso. Os contratos observados estão documentados em [`docs/chatgpt-integration.md`](docs/chatgpt-integration.md).
+
+## Arquitetura
+
+O código separa interface, aplicação, domínio e integração. Detalhes de endpoints e payloads ficam isolados na camada de integração e nunca chegam ao domínio.
+
+```text
+Interface (Side Panel: HTML/CSS/TS)
+        │
+        ▼
+Casos de uso da aplicação
+        │
+        ▼
+Domínio e contratos  ◄──  Adaptadores da integração com o ChatGPT
+```
+
+```text
+src/
+├── sidepanel.ts           # Interface do Side Panel
+├── service-worker.ts      # Service worker da extensão (MV3)
+├── domain.ts              # Modelos, filtros e seleção
+├── conversation-store.ts  # Estado e cache da listagem de conversas
+├── search-cache.ts        # Cache da pesquisa por conteúdo
+├── integration.ts         # Fronteira com as chamadas internas do ChatGPT
+├── messages.ts            # Mensagens entre painel e service worker
+└── logger.ts              # Logs estruturados (modo debug)
+```
+
+Para mais detalhes, veja a documentação:
 
 - [Requisitos](docs/requirements.md)
 - [Contratos de domínio](docs/domain-contracts.md)
 - [Arquitetura](docs/architecture.md)
 - [Integração observada com o ChatGPT](docs/chatgpt-integration.md)
 
-## Interface
+## Desenvolvimento
 
-A interface principal usa o Side Panel do Chrome (`sidepanel.html` e `src/sidepanel.ts`), com uma única tela de organização.
+**Stack:** Chrome Extension Manifest V3, TypeScript, HTML, CSS, Web APIs e Chrome Extensions APIs nativas, sem framework de UI e sem dependências de runtime.
+
+| Comando | Descrição |
+| --- | --- |
+| `npm run build` | Compila o TypeScript para `dist/` |
+| `npm test` | Compila e executa os testes com o test runner nativo do Node |
+| `npm run check` | Build completo seguido dos testes |
+
+Depois de alterar o código, rode `npm run build` e clique em **Recarregar** no card da extensão em `chrome://extensions`.
+
+As diretrizes de trabalho do projeto estão em [`AGENTS.md`](AGENTS.md) e [`CLAUDE.md`](CLAUDE.md).
 
 ## Estado do projeto
 
-O projeto está em fase inicial de especificação. A integração depende de chamadas internas observadas na aplicação web do ChatGPT e deve permanecer isolada do domínio e da interface.
+✅ **MVP concluído.** Filtragem, seleção, movimentação para Projetos, inventário com cache e exclusão de conversas fora de projeto estão prontos para uso. Daqui para frente o foco é em melhorias. O histórico das entregas fica em [`docs/plans/`](docs/plans/).
 
-## Desenvolvimento
+## Aviso legal
 
-As instruções normativas de trabalho estão em [AGENTS.md](AGENTS.md).
-
-```sh
-npm install
-npm run build
-npm test
-```
-
-Depois do build, carregue a pasta do projeto como extensão sem compactação em `chrome://extensions`.
+Este projeto é independente e **não tem afiliação, patrocínio ou endosso da OpenAI**. "ChatGPT" é uma marca da OpenAI. Use por sua conta e risco.
