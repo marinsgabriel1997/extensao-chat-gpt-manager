@@ -50,9 +50,20 @@ O **ChatGPT Manager** carrega todas as suas conversas não arquivadas em uma ún
 
 ## Instalação
 
-A extensão não está publicada na Chrome Web Store. Para instalar a partir do código-fonte:
+A extensão não está publicada na Chrome Web Store. Requer Google Chrome 114+.
 
-**Pré-requisitos:** [Node.js](https://nodejs.org/) 18+ e Google Chrome 114+.
+### A partir de uma release (recomendado)
+
+1. Baixe o `chatgpt-manager-vX.Y.Z.zip` da [última release](https://github.com/marinsgabriel1997/extensao-chat-gpt-manager/releases/latest) e descompacte-o numa pasta.
+2. Acesse `chrome://extensions`.
+3. Ative o **Modo do desenvolvedor** no canto superior direito.
+4. Clique em **Carregar sem compactação** e selecione a pasta descompactada.
+
+Para atualizar, substitua o conteúdo da pasta pelo da nova release e clique em **Recarregar** no card da extensão.
+
+### A partir do código-fonte
+
+**Pré-requisito:** [Node.js](https://nodejs.org/) 18+.
 
 ```sh
 git clone https://github.com/marinsgabriel1997/extensao-chat-gpt-manager.git
@@ -61,11 +72,7 @@ npm install
 npm run build
 ```
 
-Depois, no Chrome:
-
-1. Acesse `chrome://extensions`.
-2. Ative o **Modo do desenvolvedor** no canto superior direito.
-3. Clique em **Carregar sem compactação** e selecione a pasta do projeto.
+Depois, carregue a pasta do projeto em `chrome://extensions` seguindo os passos 2 a 4 acima.
 
 ## Como usar
 
@@ -136,8 +143,20 @@ Para mais detalhes, veja a documentação:
 | `npm run build` | Compila o TypeScript para `dist/` |
 | `npm test` | Compila e executa os testes com o test runner nativo do Node |
 | `npm run check` | Build completo seguido dos testes |
+| `npm run release` | Publica uma release no GitHub (veja abaixo) |
 
 Depois de alterar o código, rode `npm run build` e clique em **Recarregar** no card da extensão em `chrome://extensions`.
+
+### Releases
+
+As versões seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/) e as mudanças são registradas no [`CHANGELOG.md`](CHANGELOG.md). Para publicar uma versão:
+
+1. Mova as entradas de `[Unreleased]` no `CHANGELOG.md` para uma nova seção `## [X.Y.Z] - AAAA-MM-DD` e atualize os links de comparação no fim do arquivo.
+2. Atualize a versão com `npm version X.Y.Z --no-git-tag-version` e use o mesmo número em `manifest.json`.
+3. Faça o commit e o push na `main`.
+4. Rode `npm run release`.
+
+O script exige Node.js 22.2+ e o [GitHub CLI](https://cli.github.com/) autenticado. Ele confere se as versões batem, se o repositório está limpo e sincronizado e se a tag ainda não existe. Depois roda o build e os testes, gera o `.zip` instalável em `release/` e cria a tag e a release no GitHub com as notas da versão tiradas do changelog. Com `npm run release -- --dry-run`, ele só gera o pacote e mostra as notas, sem publicar.
 
 As diretrizes de trabalho do projeto estão em [`AGENTS.md`](AGENTS.md) e [`CLAUDE.md`](CLAUDE.md).
 

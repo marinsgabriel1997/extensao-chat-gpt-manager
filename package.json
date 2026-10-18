@@ -1,12 +1,13 @@
 {
   "name": "chatgpt-manager",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "test": "npm run build && node --test tests/*.test.js",
-    "check": "npm run build && npm test"
+    "check": "npm run build && npm test",
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.31",

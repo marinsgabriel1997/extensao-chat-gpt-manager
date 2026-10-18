@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Manager",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Pesquise, selecione e organize conversas do ChatGPT em Projetos.",
   "minimum_chrome_version": "114",
   "permissions": ["sidePanel", "storage"],
